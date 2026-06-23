@@ -1,0 +1,32 @@
+# === 보안: 절대 커밋 금지 ===
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+secrets.*
+
+# === 데이터베이스 (실제 데이터 제외) ===
+*.db
+*.sqlite
+*.sqlite3
+erp_dev.db
+
+# === Python ===
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# === OS / 에디터 ===
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

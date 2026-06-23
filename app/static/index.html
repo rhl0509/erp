@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ERP 관리 콘솔</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  /* ──────────────────────────────────────────────
+     Uber-inspired monochrome theme
+     "Bold black & white, tight type, urban energy"
+     순흑백 · 직각 · 타이트한 타이포 · 플랫(테두리 기반)
+     ────────────────────────────────────────────── */
+  :root{
+    --bg:#ffffff; --card:#ffffff; --ink:#000000; --muted:#6b6b6b;
+    --brand:#000000; --brand-d:#262626; --line:#e6e6e6; --line-d:#000000;
+    --field:#f6f6f6;
+    --ok:#000000; --warn:#7a5200; --danger:#000000; --danger-d:#262626;
+    --shadow:none;
+    --radius:4px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;
+       font-family:"Inter","Pretendard","Malgun Gothic","Segoe UI",system-ui,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;
+       -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  button{font-family:inherit;cursor:pointer}
+  input,select{font-family:inherit;font-size:14px}
+  a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .topbar :focus-visible{outline-color:#fff}
+  ::selection{background:#000;color:#fff}
+  /* 얇은 모노 스크롤바 (도시적 느낌) */
+  *{scrollbar-width:thin;scrollbar-color:#bdbdbd transparent}
+  *::-webkit-scrollbar{width:10px;height:10px}
+  *::-webkit-scrollbar-thumb{background:#cfcfcf;border:3px solid #fff;border-radius:0}
+  *::-webkit-scrollbar-thumb:hover{background:#000}
+
+  /* ---------- 로그인 ---------- */
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:#000}
+  .login-card{background:var(--card);width:100%;max-width:380px;border-radius:var(--radius);
+              border:1px solid var(--line);box-shadow:none;padding:40px 34px}
+  .login-card h1{margin:0 0 6px;font-size:26px;font-weight:800;letter-spacing:-.03em}
+  .login-card p.sub{margin:0 0 26px;color:var(--muted);font-size:13px}
+  .field{margin-bottom:14px}
+  .field label{display:block;margin-bottom:6px;font-weight:600;font-size:12px;
+               text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .field input{width:100%;padding:13px 12px;border:1px solid var(--line);border-radius:var(--radius);
+               background:var(--field);outline:none;transition:border-color .12s,background .12s}
+  .field input:focus{border-color:var(--ink);background:#fff}
+  .btn{border:1px solid var(--brand);border-radius:var(--radius);padding:12px 18px;font-weight:700;
+       font-size:14px;background:var(--brand);color:#fff;letter-spacing:-.01em;transition:background .12s,color .12s}
+  .btn:hover{background:var(--brand-d);border-color:var(--brand-d)}
+  .btn:active{transform:translateY(1px)}
+  .btn.block{width:100%;margin-top:6px}
+  .btn.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+  .btn.ghost:hover{background:#f0f0f0;border-color:#cfcfcf}
+  .btn.danger{background:#fff;color:var(--ink);border-color:var(--line-d)}
+  .btn.danger:hover{background:var(--danger);color:#fff}
+  .btn.sm{padding:7px 12px;font-size:13px;border-radius:var(--radius)}
+  .btn[disabled]{opacity:.35;cursor:not-allowed}
+  .login-hint{margin-top:20px;font-size:12px;color:var(--muted);text-align:center}
+  .err{color:var(--ink);font-weight:600;font-size:13px;margin-top:10px;min-height:18px}
+
+  /* ---------- 앱 셸 ---------- */
+  .app{display:none;min-height:100vh}
+  .topbar{height:60px;background:var(--ink);border-bottom:1px solid var(--ink);
+          display:flex;align-items:center;gap:18px;padding:0 24px;position:sticky;top:0;z-index:10}
+  .brand{font-weight:800;font-size:18px;color:#fff;letter-spacing:-.04em}
+  .nav{display:flex;gap:2px;flex:1}
+  .nav button{background:none;border:none;padding:9px 14px;border-radius:var(--radius);
+              color:#9b9b9b;font-weight:600;letter-spacing:-.01em}
+  .nav button:hover{background:#1f1f1f;color:#fff}
+  .nav button.active{background:#fff;color:#000}
+  .who{display:flex;align-items:center;gap:10px;font-size:13px;color:#9b9b9b}
+  .who b{color:#fff}
+  .who-btn{background:none;border:1px solid #3a3a3a;border-radius:999px;
+           padding:6px 14px;font-size:13px;color:#9b9b9b;display:flex;align-items:center;gap:5px}
+  .who-btn b{color:#fff}
+  .who-btn:hover{background:#1f1f1f;border-color:#5a5a5a}
+  .who-btn.active{background:#fff;border-color:#fff;color:#000}
+  .who-btn.active b{color:#000}
+  .topbar .btn.ghost{background:transparent;color:#fff;border-color:#3a3a3a}
+  .topbar .btn.ghost:hover{background:#fff;color:#000;border-color:#fff}
+  .container{max-width:1080px;margin:0 auto;padding:30px 24px 60px}
+  .page{display:none}
+  .page.active{display:block}
+  h2.title{margin:0 0 20px;font-size:24px;font-weight:800;letter-spacing:-.03em}
+
+  /* ---------- 카드/그리드 ---------- */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  .stat{background:var(--card);border-radius:var(--radius);border:1px solid var(--line);
+        box-shadow:none;padding:22px}
+  .stat .k{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .stat .v{font-size:34px;font-weight:800;margin-top:8px;letter-spacing:-.04em}
+  .stat .v small{font-size:14px;color:var(--muted);font-weight:600;letter-spacing:0}
+
+  /* ---------- 툴바 ---------- */
+  .panel{background:var(--card);border-radius:var(--radius);border:1px solid var(--line);
+         box-shadow:none;overflow:hidden}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px 18px;border-bottom:1px solid var(--line)}
+  .toolbar input[type=text]{padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius);
+                            background:var(--field);min-width:200px;outline:none;transition:border-color .12s,background .12s}
+  .toolbar input[type=text]:focus{border-color:var(--ink);background:#fff}
+  .toolbar select{padding:10px 10px;border:1px solid var(--line);border-radius:var(--radius);background-color:#fff}
+  .toolbar select:focus{border-color:var(--ink)}
+  .spacer{flex:1}
+  /* 플랫 톤에 맞춘 커스텀 셀렉트 화살표 (네이티브 캐럿 제거) */
+  select{appearance:none;-webkit-appearance:none;-moz-appearance:none;
+         background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3C/svg%3E");
+         background-repeat:no-repeat;background-position:right 11px center;padding-right:30px!important}
+  input:disabled,select:disabled{background:#ededed;color:#9b9b9b;cursor:not-allowed}
+
+  /* ---------- 테이블 ---------- */
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+     font-weight:700;background:#fafafa}
+  tbody tr:hover{background:#f6f6f6}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;
+       border:1px solid var(--line-d);background:#fff;color:var(--ink)}
+  .tag.cust{background:#000;color:#fff;border-color:#000}
+  .tag.supp{background:#fff;color:#000;border-color:#000}
+  .tag.both{background:#000;color:#fff;border-color:#000;box-shadow:inset 0 0 0 1.5px #fff}
+  .tag.gray{background:#f0f0f0;color:#6b6b6b;border-color:#e0e0e0}
+  .row-actions{display:flex;gap:6px;justify-content:flex-end}
+  .empty{padding:48px 16px;text-align:center;color:var(--muted)}
+  .pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;padding:14px 18px;color:var(--muted);font-size:13px}
+
+  /* ---------- 모달 ---------- */
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;
+           align-items:center;justify-content:center;padding:20px}
+  .overlay.open{display:flex}
+  .modal{background:#fff;border-radius:var(--radius);border:1px solid var(--ink);width:100%;
+         max-width:540px;box-shadow:none;max-height:90vh;overflow:auto}
+  .modal h3{margin:0;padding:20px 22px;border-bottom:1px solid var(--line);font-size:18px;
+            font-weight:800;letter-spacing:-.02em}
+  .modal .body{padding:20px 22px}
+  .modal .foot{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px;border-top:1px solid var(--line)}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .form-grid .full{grid-column:1 / -1}
+  .form-grid label{display:block;font-weight:600;font-size:12px;margin-bottom:6px;
+                   text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .form-grid input,.form-grid select{width:100%;padding:10px 11px;border:1px solid var(--line);
+                                      border-radius:var(--radius);background-color:var(--field);outline:none;transition:border-color .12s,background-color .12s}
+  .form-grid input:focus,.form-grid select:focus{border-color:var(--ink);background-color:#fff}
+  .fld-err{color:var(--ink);font-weight:600;font-size:12px;margin-top:4px;min-height:14px}
+
+  /* ---------- 칩(권한) ---------- */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip{background:#000;color:#fff;padding:4px 11px;border-radius:var(--radius);font-size:12px;
+        font-weight:600;letter-spacing:-.01em}
+
+  /* ---------- 토스트 ---------- */
+  .toasts{position:fixed;right:18px;bottom:18px;z-index:100;display:flex;flex-direction:column;gap:10px}
+  .toast{background:#000;color:#fff;border-left:4px solid #fff;box-shadow:0 8px 24px rgba(0,0,0,.25);
+         padding:14px 16px;border-radius:var(--radius);min-width:240px;animation:slidein .2s ease}
+  .toast.error{border-left-color:#fff;background:#000}
+  @keyframes slidein{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+  .muted{color:var(--muted)}
+  dl.kv{display:grid;grid-template-columns:120px 1fr;gap:10px 16px;margin:0}
+  dl.kv dt{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:12px;letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+<!-- ===== 로그인 화면 ===== -->
+<div id="loginView" class="login-wrap">
+  <form id="loginForm" class="login-card">
+    <h1>ERP 관리 콘솔</h1>
+    <p class="sub">거래처·품목 마스터를 한 화면에서 관리하세요.</p>
+    <div class="field">
+      <label for="u">아이디</label>
+      <input id="u" autocomplete="username" value="admin" />
+    </div>
+    <div class="field">
+      <label for="p">비밀번호</label>
+      <input id="p" type="password" autocomplete="current-password" value="admin1234" />
+    </div>
+    <button class="btn block" type="submit">로그인</button>
+    <div id="loginErr" class="err"></div>
+    <div class="login-hint">초기 계정 &nbsp;<b>admin / admin1234</b></div>
+  </form>
+</div>
+
+<!-- ===== 앱 본문 ===== -->
+<div id="app" class="app">
+  <div class="topbar">
+    <div class="brand">ERP&nbsp;Console</div>
+    <nav class="nav">
+      <button data-page="dashboard" class="active">대시보드</button>
+      <button data-page="partners">거래처</button>
+      <button data-page="items">품목</button>
+      <button data-page="users" data-perm="user:read">회원</button>
+    </nav>
+    <div class="who">
+      <button class="who-btn" id="meBtn" title="내 정보 보기"><b id="whoName">-</b> 님</button>
+      <button class="btn ghost sm" id="logoutBtn">로그아웃</button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- 대시보드 -->
+    <section id="dashboard" class="page active">
+      <h2 class="title">대시보드</h2>
+      <div class="cards">
+        <div class="stat"><div class="k">전체 거래처</div><div class="v" id="cntPartners">-</div></div>
+        <div class="stat"><div class="k">전체 품목</div><div class="v" id="cntItems">-</div></div>
+        <div class="stat"><div class="k">내 역할</div><div class="v" id="myRoles" style="font-size:18px">-</div></div>
+      </div>
+    </section>
+
+    <!-- 거래처 -->
+    <section id="partners" class="page">
+      <h2 class="title">거래처 관리</h2>
+      <div class="panel">
+        <div class="toolbar">
+          <input type="text" id="pSearch" placeholder="이름 또는 코드 검색" />
+          <select id="pType">
+            <option value="">전체 유형</option>
+            <option value="customer">고객</option>
+            <option value="supplier">공급처</option>
+            <option value="both">고객+공급</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn" id="pAddBtn" data-perm="partner:write">+ 거래처 등록</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>코드</th><th>이름</th><th>유형</th><th>대표자</th><th>연락처</th><th>사업자번호</th><th></th>
+          </tr></thead>
+          <tbody id="pBody"></tbody>
+        </table>
+        <div class="pager" id="pPager"></div>
+      </div>
+    </section>
+
+    <!-- 품목 -->
+    <section id="items" class="page">
+      <h2 class="title">품목 관리</h2>
+      <div class="panel">
+        <div class="toolbar">
+          <input type="text" id="iSearch" placeholder="이름 또는 코드 검색" />
+          <select id="iType">
+            <option value="">전체 유형</option>
+            <option value="product">제품</option>
+            <option value="material">원자재</option>
+            <option value="service">서비스</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn" id="iAddBtn" data-perm="item:write">+ 품목 등록</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>코드</th><th>이름</th><th>규격</th><th>단위</th><th>유형</th>
+            <th class="num">매입가</th><th class="num">매출가</th><th></th>
+          </tr></thead>
+          <tbody id="iBody"></tbody>
+        </table>
+        <div class="pager" id="iPager"></div>
+      </div>
+    </section>
+
+    <!-- 회원 -->
+    <section id="users" class="page">
+      <h2 class="title">회원 관리</h2>
+      <div class="panel">
+        <div class="toolbar">
+          <span class="muted">시스템에 등록된 모든 회원을 조회합니다.</span>
+          <div class="spacer"></div>
+          <button class="btn" id="uAddBtn" data-perm="user:write">+ 회원 등록</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>아이디</th><th>이름</th><th>이메일</th><th>역할</th><th>상태</th><th></th>
+          </tr></thead>
+          <tbody id="uBody"></tbody>
+        </table>
+        <div class="pager" id="uPager"></div>
+      </div>
+    </section>
+
+    <!-- 내 정보 -->
+    <section id="me" class="page">
+      <h2 class="title">내 정보</h2>
+      <div class="panel" style="padding:22px">
+        <dl class="kv">
+          <dt>아이디</dt><dd id="meUser">-</dd>
+          <dt>이름</dt><dd id="meName">-</dd>
+          <dt>이메일</dt><dd id="meEmail">-</dd>
+          <dt>역할</dt><dd id="meRoles">-</dd>
+        </dl>
+        <div style="margin-top:18px">
+          <div class="muted" style="font-weight:600">보유 권한</div>
+          <div class="chips" id="mePerms"></div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ===== 모달 ===== -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="mTitle">제목</h3>
+    <div class="body"><div class="form-grid" id="mForm"></div></div>
+    <div class="foot">
+      <button class="btn ghost" id="mCancel">취소</button>
+      <button class="btn" id="mSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+//==================== 공통 ====================
+const TOKEN_KEY = "erp_token";
+let ME = null;                     // 현재 사용자 정보(+permissions)
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+
+function token(){ return localStorage.getItem(TOKEN_KEY); }
+function setToken(t){ t ? localStorage.setItem(TOKEN_KEY,t) : localStorage.removeItem(TOKEN_KEY); }
+function esc(s){ return String(s ?? "").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function won(n){ return (Number(n)||0).toLocaleString("ko-KR"); }
+function can(code){ return ME && (ME.permissions.includes("*") || ME.permissions.includes(code)); }
+
+function toast(msg, isErr=false){
+  const el = document.createElement("div");
+  el.className = "toast" + (isErr ? " error" : "");
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(()=>el.remove(), 3200);
+}
+
+// 모든 API 호출 + 일관된 오류 처리(서버의 {detail, code, fields} 형식 활용)
+async function api(path, {method="GET", body=null, auth=true, form=false}={}){
+  const headers = {};
+  if(auth && token()) headers["Authorization"] = "Bearer " + token();
+  let payload = body;
+  if(body && !form){ headers["Content-Type"]="application/json"; payload = JSON.stringify(body); }
+  const res = await fetch(path, {method, headers, body:payload});
+  if(res.status === 204) return null;
+  let data = null;
+  try{ data = await res.json(); }catch(_){}
+  if(!res.ok){
+    if(res.status === 401 && auth){ doLogout(); }
+    const err = new Error((data && data.detail) || "요청을 처리하지 못했습니다.");
+    err.status = res.status; err.fields = data && data.fields;
+    throw err;
+  }
+  return data;
+}
+
+//==================== 로그인 ====================
+$("#loginForm").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  $("#loginErr").textContent = "";
+  const fd = new URLSearchParams({username:$("#u").value.trim(), password:$("#p").value});
+  try{
+    const data = await api("/api/auth/login", {method:"POST", body:fd, auth:false, form:true});
+    setToken(data.access_token);
+    await boot();
+  }catch(err){
+    $("#loginErr").textContent = err.message;
+  }
+});
+
+function doLogout(){
+  setToken(null); ME = null;
+  $("#app").style.display = "none";
+  $("#loginView").style.display = "flex";
+}
+$("#logoutBtn").addEventListener("click", doLogout);
+
+//==================== 부팅 / 네비게이션 ====================
+async function boot(){
+  ME = await api("/api/auth/me");
+  $("#loginView").style.display = "none";
+  $("#app").style.display = "block";
+  $("#whoName").textContent = ME.full_name || ME.username;
+  // 권한 없는 버튼 숨김
+  $$("[data-perm]").forEach(b => b.style.display = can(b.dataset.perm) ? "" : "none");
+  renderMe();
+  go("dashboard");
+}
+
+$$(".nav button").forEach(b => b.addEventListener("click", ()=>go(b.dataset.page)));
+$("#meBtn").addEventListener("click", ()=>go("me"));
+
+function go(page){
+  $$(".nav button").forEach(b => b.classList.toggle("active", b.dataset.page===page));
+  $("#meBtn").classList.toggle("active", page==="me");
+  $$(".page").forEach(s => s.classList.toggle("active", s.id===page));
+  if(page==="dashboard") loadDashboard();
+  if(page==="partners") loadPartners();
+  if(page==="items") loadItems();
+  if(page==="users") loadUsers();
+}
+
+//==================== 대시보드 ====================
+async function loadDashboard(){
+  try{
+    const [p, i] = await Promise.all([
+      api("/api/partners?page=1&page_size=1"),
+      api("/api/items?page=1&page_size=1"),
+    ]);
+    $("#cntPartners").innerHTML = won(p.total) + ' <small>건</small>';
+    $("#cntItems").innerHTML = won(i.total) + ' <small>건</small>';
+    $("#myRoles").textContent = ME.roles.map(r=>r.name).join(", ") || "-";
+  }catch(err){ toast(err.message, true); }
+}
+
+//==================== 내 정보 ====================
+function renderMe(){
+  $("#meUser").textContent = ME.username;
+  $("#meName").textContent = ME.full_name || "-";
+  $("#meEmail").textContent = ME.email || "-";
+  $("#meRoles").textContent = ME.roles.map(r=>r.name).join(", ") || "-";
+  $("#mePerms").innerHTML = ME.permissions.map(c=>`<span class="chip">${esc(c)}</span>`).join("") || '<span class="muted">없음</span>';
+}
+
+//==================== 거래처 ====================
+const pState = {page:1, q:"", type:""};
+const TYPE_TAG = {customer:["cust","고객"], supplier:["supp","공급처"], both:["both","고객+공급"]};
+
+$("#pSearch").addEventListener("input", debounce(()=>{ pState.q=$("#pSearch").value.trim(); pState.page=1; loadPartners(); }, 300));
+$("#pType").addEventListener("change", ()=>{ pState.type=$("#pType").value; pState.page=1; loadPartners(); });
+$("#pAddBtn").addEventListener("click", ()=> openPartnerForm(null));
+
+async function loadPartners(){
+  const qs = new URLSearchParams({page:pState.page, page_size:10});
+  if(pState.q) qs.set("q", pState.q);
+  if(pState.type) qs.set("partner_type", pState.type);
+  try{
+    const data = await api("/api/partners?"+qs);
+    _partners = {}; data.items.forEach(x=>_partners[x.id]=x);
+    const tag = ([cls,label]) => `<span class="tag ${cls}">${label}</span>`;
+    $("#pBody").innerHTML = data.items.length ? data.items.map(p=>`
+      <tr>
+        <td><b>${esc(p.code)}</b></td>
+        <td>${esc(p.name)}</td>
+        <td>${tag(TYPE_TAG[p.partner_type]||["gray",p.partner_type])}</td>
+        <td>${esc(p.ceo_name)||"-"}</td>
+        <td>${esc(p.phone)||"-"}</td>
+        <td>${esc(p.business_no)||"-"}</td>
+        <td><div class="row-actions">
+          ${can("partner:write")?`<button class="btn ghost sm" onclick='editPartner(${p.id})'>수정</button>
+          <button class="btn danger sm" onclick='delPartner(${p.id},"${esc(p.name)}")'>삭제</button>`:""}
+        </div></td>
+      </tr>`).join("") : emptyRow(7);
+    renderPager("#pPager", data, pState, loadPartners);
+  }catch(err){ toast(err.message, true); }
+}
+
+let _partners = {};
+async function editPartner(id){ openPartnerForm(_partners[id]); }
+async function delPartner(id, name){
+  if(!confirm(`거래처 "${name}" 을(를) 삭제할까요?`)) return;
+  try{ await api(`/api/partners/${id}`, {method:"DELETE"}); toast("삭제했습니다."); loadPartners(); }
+  catch(err){ toast(err.message, true); }
+}
+
+function openPartnerForm(p){
+  const fields = [
+    {k:"name", label:"이름 *", full:false},
+    {k:"partner_type", label:"유형", type:"select", opts:[["customer","고객"],["supplier","공급처"],["both","고객+공급"]]},
+    {k:"ceo_name", label:"대표자"},
+    {k:"business_no", label:"사업자등록번호"},
+    {k:"phone", label:"연락처"},
+    {k:"email", label:"이메일"},
+    {k:"address", label:"주소", full:true},
+  ];
+  openForm(p ? "거래처 수정" : "거래처 등록", fields, p, async (payload)=>{
+    if(p) await api(`/api/partners/${p.id}`, {method:"PUT", body:payload});
+    else  await api("/api/partners", {method:"POST", body:payload});
+    toast(p ? "수정했습니다." : "등록했습니다.");
+    loadPartners();
+  });
+}
+
+//==================== 품목 ====================
+const iState = {page:1, q:"", type:""};
+const ITYPE = {product:"제품", material:"원자재", service:"서비스"};
+
+$("#iSearch").addEventListener("input", debounce(()=>{ iState.q=$("#iSearch").value.trim(); iState.page=1; loadItems(); }, 300));
+$("#iType").addEventListener("change", ()=>{ iState.type=$("#iType").value; iState.page=1; loadItems(); });
+$("#iAddBtn").addEventListener("click", ()=> openItemForm(null));
+
+let _items = {};
+async function loadItems(){
+  const qs = new URLSearchParams({page:iState.page, page_size:10});
+  if(iState.q) qs.set("q", iState.q);
+  if(iState.type) qs.set("item_type", iState.type);
+  try{
+    const data = await api("/api/items?"+qs);
+    _items = {}; data.items.forEach(x=>_items[x.id]=x);
+    $("#iBody").innerHTML = data.items.length ? data.items.map(it=>`
+      <tr>
+        <td><b>${esc(it.code)}</b></td>
+        <td>${esc(it.name)}</td>
+        <td>${esc(it.spec)||"-"}</td>
+        <td>${esc(it.unit)}</td>
+        <td><span class="tag gray">${esc(ITYPE[it.item_type]||it.item_type)}</span></td>
+        <td class="num">${won(it.purchase_price)}</td>
+        <td class="num">${won(it.sales_price)}</td>
+        <td><div class="row-actions">
+          ${can("item:write")?`<button class="btn ghost sm" onclick='editItem(${it.id})'>수정</button>
+          <button class="btn danger sm" onclick='delItem(${it.id},"${esc(it.name)}")'>삭제</button>`:""}
+        </div></td>
+      </tr>`).join("") : emptyRow(8);
+    renderPager("#iPager", data, iState, loadItems);
+  }catch(err){ toast(err.message, true); }
+}
+
+async function editItem(id){ openItemForm(_items[id]); }
+async function delItem(id, name){
+  if(!confirm(`품목 "${name}" 을(를) 삭제할까요?`)) return;
+  try{ await api(`/api/items/${id}`, {method:"DELETE"}); toast("삭제했습니다."); loadItems(); }
+  catch(err){ toast(err.message, true); }
+}
+
+function openItemForm(it){
+  const fields = [
+    {k:"name", label:"이름 *"},
+    {k:"item_type", label:"유형", type:"select", opts:[["product","제품"],["material","원자재"],["service","서비스"]]},
+    {k:"spec", label:"규격"},
+    {k:"unit", label:"단위", default:"EA"},
+    {k:"purchase_price", label:"매입가", type:"number", default:0},
+    {k:"sales_price", label:"매출가", type:"number", default:0},
+  ];
+  openForm(it ? "품목 수정" : "품목 등록", fields, it, async (payload)=>{
+    payload.purchase_price = Number(payload.purchase_price)||0;
+    payload.sales_price = Number(payload.sales_price)||0;
+    if(it) await api(`/api/items/${it.id}`, {method:"PUT", body:payload});
+    else  await api("/api/items", {method:"POST", body:payload});
+    toast(it ? "수정했습니다." : "등록했습니다.");
+    loadItems();
+  });
+}
+
+//==================== 회원 ====================
+const uState = {page:1};
+let _users = {}, _roles = null;
+
+const uAdd = $("#uAddBtn");
+if(uAdd) uAdd.addEventListener("click", ()=> openUserForm());
+
+async function loadUsers(){
+  try{
+    const data = await api(`/api/users?page=${uState.page}&page_size=10`);
+    _users = {}; data.items.forEach(u=>_users[u.id]=u);
+    $("#uBody").innerHTML = data.items.length ? data.items.map(u=>`
+      <tr>
+        <td><b>${esc(u.username)}</b></td>
+        <td>${esc(u.full_name)||"-"}</td>
+        <td>${esc(u.email)||"-"}</td>
+        <td>${u.roles.map(r=>`<span class="tag gray">${esc(r.name)}</span>`).join(" ")||'<span class="muted">없음</span>'}</td>
+        <td>${u.is_active?'<span class="tag both">활성</span>':'<span class="tag supp">비활성</span>'}</td>
+        <td><div class="row-actions">
+          <button class="btn ghost sm" onclick='viewUser(${u.id})'>상세</button>
+        </div></td>
+      </tr>`).join("") : emptyRow(6);
+    renderPager("#uPager", data, uState, loadUsers);
+  }catch(err){ toast(err.message, true); }
+}
+
+// 회원 상세: 역할과 권한을 한눈에 보여준다(읽기 전용).
+function viewUser(id){
+  const u = _users[id];
+  if(!u) return;
+  const perms = [...new Set(u.roles.flatMap(r=>r.permissions.map(p=>p.code)))].sort();
+  $("#mTitle").textContent = `회원 상세 · ${u.username}`;
+  $("#mForm").innerHTML = `
+    <div class="full"><dl class="kv">
+      <dt>아이디</dt><dd>${esc(u.username)}</dd>
+      <dt>이름</dt><dd>${esc(u.full_name)||"-"}</dd>
+      <dt>이메일</dt><dd>${esc(u.email)||"-"}</dd>
+      <dt>상태</dt><dd>${u.is_active?"활성":"비활성"}</dd>
+      <dt>역할</dt><dd>${u.roles.map(r=>esc(r.name)).join(", ")||"-"}</dd>
+    </dl></div>
+    <div class="full"><div class="muted" style="font-weight:600">보유 권한</div>
+      <div class="chips">${perms.map(c=>`<span class="chip">${esc(c)}</span>`).join("")||'<span class="muted">없음</span>'}</div>
+    </div>`;
+  _onSave = null;                       // 읽기 전용
+  $("#mSave").style.display = "none";   // 저장 버튼 숨김
+  $("#mCancel").textContent = "닫기";
+  $("#overlay").classList.add("open");
+}
+
+// 회원 등록 (user:write 권한 필요)
+async function openUserForm(){
+  if(!_roles){
+    try{ const r = await api("/api/roles?page=1&page_size=100"); _roles = r.items || r; }
+    catch(_){ _roles = []; }
+  }
+  const fields = [
+    {k:"username", label:"아이디 *"},
+    {k:"password", label:"비밀번호 *", type:"password"},
+    {k:"full_name", label:"이름"},
+    {k:"email", label:"이메일"},
+    {k:"role_ids", label:"역할", type:"select", full:true,
+     opts:[["","(역할 없음)"], ..._roles.map(r=>[String(r.id), r.name])]},
+  ];
+  openForm("회원 등록", fields, null, async (payload)=>{
+    payload.role_ids = payload.role_ids ? [Number(payload.role_ids)] : [];
+    await api("/api/users", {method:"POST", body:payload});
+    toast("회원을 등록했습니다.");
+    loadUsers();
+  });
+}
+
+//==================== 공용 폼 모달 ====================
+let _onSave = null;
+function openForm(title, fields, data, onSave){
+  $("#mTitle").textContent = title;
+  $("#mForm").innerHTML = fields.map(f=>{
+    const val = data ? (data[f.k] ?? "") : (f.default ?? "");
+    const cls = f.full ? "full" : "";
+    let input;
+    if(f.type==="select"){
+      input = `<select name="${f.k}">`+f.opts.map(([v,l])=>
+        `<option value="${v}" ${String(val)===v?"selected":""}>${l}</option>`).join("")+`</select>`;
+    }else{
+      input = `<input name="${f.k}" type="${f.type||"text"}" value="${esc(val)}" />`;
+    }
+    return `<div class="${cls}"><label>${f.label}</label>${input}<div class="fld-err" data-err="${f.k}"></div></div>`;
+  }).join("");
+  _onSave = onSave;
+  $("#mSave").style.display = "";       // 읽기전용 모달이 숨겼을 수 있어 복원
+  $("#mCancel").textContent = "취소";
+  $("#overlay").classList.add("open");
+  setTimeout(()=>{ const first=$("#mForm input,#mForm select"); first&&first.focus(); }, 50);
+}
+
+function closeModal(){ $("#overlay").classList.remove("open"); _onSave=null; }
+$("#mCancel").addEventListener("click", closeModal);
+$("#overlay").addEventListener("click", e=>{ if(e.target.id==="overlay") closeModal(); });
+
+$("#mSave").addEventListener("click", async ()=>{
+  if(!_onSave) return;
+  $$("#mForm .fld-err").forEach(e=>e.textContent="");
+  const payload = {};
+  $$("#mForm [name]").forEach(el => payload[el.name]=el.value);
+  $("#mSave").disabled = true;
+  try{
+    await _onSave(payload);
+    closeModal();
+  }catch(err){
+    if(err.fields){
+      for(const [k,msg] of Object.entries(err.fields)){
+        const e = $(`#mForm [data-err="${k}"]`);
+        if(e) e.textContent = msg;
+      }
+      toast(err.message, true);
+    }else{
+      toast(err.message, true);
+    }
+  }finally{
+    $("#mSave").disabled = false;
+  }
+});
+
+//==================== 유틸: 페이저 / 빈 행 / 디바운스 ====================
+function emptyRow(cols){ return `<tr><td colspan="${cols}" class="empty">데이터가 없습니다.</td></tr>`; }
+
+function renderPager(sel, data, state, reload){
+  const {page, pages, total} = data;
+  $(sel).innerHTML = `
+    <span>전체 ${won(total)}건 · ${page}/${Math.max(pages,1)} 페이지</span>
+    <button class="btn ghost sm" ${page<=1?"disabled":""} data-go="prev">이전</button>
+    <button class="btn ghost sm" ${page>=pages?"disabled":""} data-go="next">다음</button>`;
+  const prev=$(`${sel} [data-go=prev]`), next=$(`${sel} [data-go=next]`);
+  if(prev) prev.onclick=()=>{ state.page=Math.max(1,page-1); reload(); };
+  if(next) next.onclick=()=>{ state.page=page+1; reload(); };
+}
+
+function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+//==================== 시작 ====================
+(async function(){
+  if(token()){
+    try{ await boot(); return; }catch(_){ setToken(null); }
+  }
+  $("#loginView").style.display = "flex";
+})();
+</script>
+</body>
+</html>
