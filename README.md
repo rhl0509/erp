@@ -12,6 +12,18 @@ ERP 공통 기반 + 거래처/품목 마스터 백엔드 (FastAPI + SQLAlchemy +
 - 목록 API 페이지네이션(`items/total/page/page_size/pages`) + 검색·유형 필터
 - 일관된 오류 응답(`{detail, code, fields}`) — 입력값 오류 시 필드별 한글 메시지
 
+## 화면 미리보기
+
+모노크롬 디자인 시스템을 적용한 웹 관리 콘솔입니다. (`admin` / `admin1234`)
+
+| 로그인 | 대시보드 |
+|--------|----------|
+| ![로그인](docs/screenshots/01-login.png) | ![대시보드](docs/screenshots/02-dashboard.png) |
+
+| 거래처 관리 | 품목 등록 모달 |
+|-------------|----------------|
+| ![거래처 관리](docs/screenshots/03-partners.png) | ![품목 등록 모달](docs/screenshots/04-item-modal.png) |
+
 ## 사전 준비
 
 - Python 3.10 이상 설치 (설치 시 **"Add python.exe to PATH"** 체크)
