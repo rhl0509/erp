@@ -18,8 +18,8 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "대시보드", href: "/dashboard" },
-  { key: "partners", label: "거래처", href: "/legacy#partners", legacy: true },
-  { key: "items", label: "품목", href: "/legacy#items", legacy: true },
+  { key: "partners", label: "거래처", href: "/partners" },
+  { key: "items", label: "품목", href: "/items" },
   { key: "stock", label: "재고", href: "/legacy#stock", perm: "stock:read", legacy: true },
   { key: "warehouses", label: "창고", href: "/legacy#warehouses", perm: "stock:read", legacy: true },
   { key: "purchase", label: "발주", href: "/legacy#purchase", perm: "purchase:read", legacy: true },

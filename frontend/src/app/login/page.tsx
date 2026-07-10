@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useForm, type FieldValues, type Path, type UseFormSetError } from "react-hook-form";
+import { useForm } from "react-hook-form";
 
 import Button from "@/components/ui/Button";
 import Field from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { client, loginRequest, unwrap } from "@/lib/api/client";
-import { ApiRequestError, errorMessage } from "@/lib/api/errors";
+import { errorMessage } from "@/lib/api/errors";
+import { applyServerFieldErrors } from "@/lib/forms";
 import { ME_QUERY_KEY } from "@/lib/auth/AuthProvider";
 
 import styles from "./page.module.css";
@@ -21,27 +22,6 @@ type RegisterValues = {
   full_name: string;
   email: string;
 };
-
-/**
- * 서버 422 {fields} → RHF 필드 에러 매핑. 폼에 없는 필드/그 외 오류는
- * 호출부 toast 로 처리하도록 "매핑했는지" 여부를 반환한다.
- */
-function applyServerFieldErrors<T extends FieldValues>(
-  err: unknown,
-  fieldNames: readonly Path<T>[],
-  setError: UseFormSetError<T>,
-): boolean {
-  if (!(err instanceof ApiRequestError) || !err.fields) return false;
-  let applied = false;
-  for (const name of fieldNames) {
-    const message = err.fields[name];
-    if (message) {
-      setError(name, { type: "server", message });
-      applied = true;
-    }
-  }
-  return applied;
-}
 
 /**
  * 로그인/회원가입 — 레거시 index.html loginView/registerForm 패리티.

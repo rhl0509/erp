@@ -1,0 +1,29 @@
+/* index.html #items .page-head 이식 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 비활성 품목 이름 옆 태그 간격 */
+.nameCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}

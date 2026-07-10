@@ -13,20 +13,22 @@
   color: var(--muted);
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   padding: 13px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--field);
+  background-color: var(--field);
   outline: none;
-  transition: border-color var(--tr), background var(--tr),
+  transition: border-color var(--tr), background-color var(--tr),
     box-shadow var(--tr);
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: var(--ink);
-  background: #fff;
+  background-color: #fff;
   box-shadow: var(--ring);
 }
 

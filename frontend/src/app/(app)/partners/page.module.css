@@ -1,0 +1,58 @@
+/* index.html #partners .page-head + 거래처 내역 모달 레이아웃 이식 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 내역 모달 — 총 매입/총 매출 stat 2장 나란히(레거시 인라인 스타일 패리티) */
+.ledgerStats {
+  display: flex;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+}
+
+.ledgerStats > * {
+  flex: 1;
+}
+
+/* 내역 모달 — 구분 필터 + 엑셀 내보내기 줄 */
+.ledgerBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.ledgerBar select {
+  padding: 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: #fff;
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.ledgerBar select:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+}
+
+.ledgerSpacer {
+  flex: 1;
+}

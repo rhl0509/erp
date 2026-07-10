@@ -1,0 +1,80 @@
+/* index.html .overlay / .modal / .form-grid 이식 */
+.overlay {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5);
+  animation: fadein 0.15s ease;
+}
+
+.modal {
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--ink);
+  width: 100%;
+  max-width: 540px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+  max-height: 90vh;
+  overflow: auto;
+  animation: pop 0.16s ease;
+  outline: none;
+}
+
+/* 레거시 거래처 내역 모달의 760px 확장 패리티 */
+.wide {
+  max-width: 760px;
+}
+
+@keyframes pop {
+  from {
+    transform: translateY(10px) scale(0.99);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.title {
+  margin: 0;
+  padding: var(--s5) var(--s6);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+}
+
+.body {
+  padding: var(--s5) var(--s6);
+}
+
+.foot {
+  display: flex;
+  gap: var(--s3);
+  justify-content: flex-end;
+  padding: var(--s4) var(--s6);
+  border-top: 1px solid var(--line);
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* 세로 리듬은 Field 자체의 margin-bottom(--s4)이 담당 */
+  gap: 0 var(--s4);
+}
+
+.full {
+  grid-column: 1 / -1;
+}

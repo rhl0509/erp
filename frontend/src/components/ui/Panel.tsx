@@ -33,7 +33,12 @@ export function PanelHead({
   );
 }
 
-/** 레거시 .toolbar — 검색/필터 줄(후속 슬라이스의 목록 화면용) */
+/** 레거시 .toolbar — 검색/필터 줄. input[type=text]/select 스타일 포함 */
 export function Toolbar({ children }: { children: ReactNode }) {
   return <div className={styles.toolbar}>{children}</div>;
+}
+
+/** 레거시 .spacer — 툴바에서 좌측 필터와 우측 버튼을 밀어내는 빈 공간 */
+export function Spacer() {
+  return <div className={styles.spacer} />;
 }

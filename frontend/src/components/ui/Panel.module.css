@@ -30,3 +30,37 @@
   padding: var(--s4) var(--s5);
   border-bottom: 1px solid var(--line);
 }
+
+.toolbar input[type="text"] {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--field);
+  min-width: 220px;
+  outline: none;
+  transition: border-color var(--tr), background-color var(--tr),
+    box-shadow var(--tr);
+}
+
+.toolbar input[type="text"]:focus {
+  border-color: var(--ink);
+  background-color: #fff;
+  box-shadow: var(--ring);
+}
+
+.toolbar select {
+  padding: 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: #fff;
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.toolbar select:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+}
+
+.spacer {
+  flex: 1;
+}

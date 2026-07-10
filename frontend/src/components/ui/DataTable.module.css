@@ -1,0 +1,102 @@
+/* index.html 테이블/페이저 CSS 이식 (th/td, .num, td.code, .empty, .loading, .pager) */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 13px var(--s4);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table th {
+  font-size: var(--t-xs);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 700;
+  background: var(--surface-2);
+}
+
+.table tbody tr {
+  transition: background var(--tr);
+}
+
+.table tbody tr:hover {
+  background: var(--field);
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+td.code {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+th.num {
+  text-align: right;
+}
+
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+th.sortable:hover {
+  color: var(--ink);
+}
+
+.sortInd {
+  margin-left: 4px;
+  font-size: 9px;
+  color: var(--muted-2);
+}
+
+.empty {
+  padding: var(--s9) var(--s4);
+  text-align: center;
+  color: var(--muted);
+}
+
+.loading {
+  padding: var(--s7) var(--s4);
+  text-align: center;
+  color: var(--muted-2);
+}
+
+.rowActions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  justify-content: flex-end;
+  padding: var(--s4) var(--s5);
+  color: var(--muted);
+  font-size: var(--t-cap);
+  border-top: 1px solid var(--line);
+}
+
+.pinfo {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+}
