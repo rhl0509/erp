@@ -1,0 +1,30 @@
+services:
+  db:
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      # 필수 환경변수: 미설정 시 기동 실패 (기본값 없음 — .env 또는 셸에서 지정)
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required (set it in .env)}
+      MYSQL_DATABASE: erp_db
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required (set it in .env)}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: mysql+pymysql://root:${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required (set it in .env)}@db:3306/erp_db?charset=utf8mb4
+      # 필수: 길고 무작위한 값. 미설정 시 기동 실패(기본값 없음 — 약한 값이면 앱이 기동 거부)
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - set a long random value in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+volumes:
+  dbdata:

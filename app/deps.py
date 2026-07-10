@@ -1,3 +1,4 @@
+import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -21,7 +22,8 @@ def get_current_user(
     try:
         payload = decode_token(token)
         user_id = int(payload.get("sub"))
-    except Exception:
+    except (jwt.PyJWTError, TypeError, ValueError):
+        # PyJWTError: 서명/만료 등 토큰 자체 오류, TypeError/ValueError: sub 누락·비정상
         raise cred_exc
 
     user = db.get(User, user_id)

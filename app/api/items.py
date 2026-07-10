@@ -3,7 +3,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Item, User
+from ..models import Item, StockMovement, PurchaseOrderLine, SalesOrderLine, User
 from ..schemas import ItemCreate, ItemUpdate, ItemOut, Page
 from ..deps import require_permission
 from ..services import generate_code, record_audit, paginate
@@ -67,7 +67,9 @@ def update_item(
     if not item:
         raise HTTPException(status_code=404, detail="품목을 찾을 수 없습니다")
 
-    data = payload.model_dump()
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="수정할 항목이 없습니다")
     before = {k: getattr(item, k) for k in data.keys()}
     for k, v in data.items():
         setattr(item, k, v)
@@ -86,6 +88,20 @@ def delete_item(
     item = db.get(Item, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="품목을 찾을 수 없습니다")
+    # 참조 데이터가 있으면 FK 오류(500) 대신 409로 안내한다.
+    referenced = (
+        db.execute(select(StockMovement.id)
+                   .where(StockMovement.item_id == item_id).limit(1)).first()
+        or db.execute(select(PurchaseOrderLine.id)
+                      .where(PurchaseOrderLine.item_id == item_id).limit(1)).first()
+        or db.execute(select(SalesOrderLine.id)
+                      .where(SalesOrderLine.item_id == item_id).limit(1)).first()
+    )
+    if referenced:
+        raise HTTPException(
+            status_code=409,
+            detail="입출고·발주·수주 이력이 있는 품목은 삭제할 수 없습니다. 대신 비활성화하세요.",
+        )
     before = {"code": item.code, "name": item.name}
     db.delete(item)
     record_audit(db, user, "DELETE", "item", item_id, before=before)

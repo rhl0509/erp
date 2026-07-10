@@ -7,7 +7,7 @@ REM Usage: double-click this file, or type  run.bat  in CMD.
 REM Then open http://localhost:8000/  (login: admin / admin1234)
 
 set "DATABASE_URL=sqlite:///./erp_dev.db"
-set "JWT_SECRET=local-dev-secret-please-change-this-32bytes"
+set "JWT_SECRET=local-dev-only-secret-0123456789abcdef"
 
 set "PY=%~dp0.venv\Scripts\python.exe"
 if not exist "%PY%" (

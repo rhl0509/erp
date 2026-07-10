@@ -1,4 +1,17 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 절대 운영에 나가면 안 되는 자리표시자 시크릿. 이 값들로는 기동을 거부한다.
+# (과거 docker-compose 기본값이었던 약한 문자열도 방어적으로 포함)
+_INSECURE_SECRETS = {
+    "", "change-me", "change-me-in-production",
+    "change-this-to-a-long-random-secret-please", "erp_root_pw",
+    "please-change-this-to-a-long-random-string",  # .env.example 의 예전 예시값
+}
+# 정확 일치 블록리스트만으로는 .env.example 을 그대로 복사한 값을 놓친다.
+# "바꿔야 하는 값"임을 드러내는 표식이 들어 있으면 길이와 무관하게 거부한다.
+_PLACEHOLDER_MARKERS = ("change", "please", "example", "replace", "your-", "xxxx", "placeholder", "todo")
+_MIN_SECRET_LEN = 16
 
 
 class Settings(BaseSettings):
@@ -13,6 +26,19 @@ class Settings(BaseSettings):
 
     # 콤마로 여러 origin 지정 가능
     cors_origins: str = "http://localhost:3000"
+
+    @model_validator(mode="after")
+    def _guard_jwt_secret(self):
+        # 기본/약한/자리표시자 시크릿으로는 조용히 기동하지 않는다(토큰 위조 위험).
+        low = self.jwt_secret.lower()
+        is_placeholder = any(m in low for m in _PLACEHOLDER_MARKERS)
+        if self.jwt_secret in _INSECURE_SECRETS or len(self.jwt_secret) < _MIN_SECRET_LEN or is_placeholder:
+            raise ValueError(
+                "JWT_SECRET가 설정되지 않았거나 안전하지 않습니다. "
+                f".env 에 최소 {_MIN_SECRET_LEN}자 이상의 무작위 값을 지정하세요. "
+                '예: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+        return self
 
 
 settings = Settings()

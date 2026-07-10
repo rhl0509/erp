@@ -4,23 +4,31 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
 from .database import Base, engine
+from .observability import (
+    RequestContextMiddleware, setup_logging, get_request_id, render_metrics,
+)
 from . import models  # noqa: F401  (모델 등록을 위해 import 필요)
-from .api import auth, users, partners, items
+from .api import (
+    auth, users, partners, items, stock, stats, reports, audit,
+    purchase, sales, costing, payments, invoices,
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 개발 편의를 위해 기동 시 테이블 생성.
-    # 운영에서는 Alembic 마이그레이션으로 대체하세요.
-    Base.metadata.create_all(bind=engine)
+    # SQLite(로컬 개발)에서는 편의를 위해 기동 시 테이블을 생성한다.
+    # MySQL 등 운영 DB에서는 스키마를 Alembic 마이그레이션으로만 관리한다:
+    #   alembic upgrade head
+    if engine.dialect.name == "sqlite":
+        Base.metadata.create_all(bind=engine)
     yield
 
 
@@ -39,16 +47,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# request_id 부여 + JSON access 로그 + 메트릭. CORS 보다 나중에 add_middleware 해
+# 스택의 바깥쪽에 놓는다(모든 실제 요청이 이 미들웨어를 통과).
+setup_logging()
+app.add_middleware(RequestContextMiddleware)
+
 
 # ---------- 일관된 오류 응답 ----------
-# 모든 오류를 {detail, code, fields?} 형식으로 통일해 클라이언트가 다루기 쉽게 한다.
+# 모든 오류를 {detail, code, request_id, fields?} 형식으로 통일해 클라이언트가 다루기
+# 쉽게 한다. request_id 는 지원 문의 시 서버 로그와 상관지을 수 있는 키다.
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     code_map = {400: "bad_request", 401: "unauthorized", 403: "forbidden",
                 404: "not_found", 409: "conflict"}
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail, "code": code_map.get(exc.status_code, "error")},
+        content={"detail": exc.detail, "code": code_map.get(exc.status_code, "error"),
+                 "request_id": get_request_id()},
         headers=getattr(exc, "headers", None),
     )
 
@@ -63,7 +78,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         fields[key] = _friendly_message(err)
     return JSONResponse(
         status_code=422,
-        content={"detail": "입력값을 다시 확인해 주세요.", "code": "validation_error", "fields": fields},
+        content={"detail": "입력값을 다시 확인해 주세요.", "code": "validation_error",
+                 "fields": fields, "request_id": get_request_id()},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # 미처리 예외 → 500 응답 통일. 스택은 RequestContextMiddleware 가 이미
+    # (본문/토큰 등 민감정보 없이) JSON error 로그로 남겼다. 클라이언트에는 내부
+    # 정보를 숨기고 request_id 만 노출한다. 이 핸들러는 미들웨어 스택의 최외곽
+    # (ServerErrorMiddleware)에서 실행돼 X-Request-ID 응답 헤더를 직접 붙인다.
+    rid = get_request_id()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "서버 내부 오류가 발생했습니다.", "code": "internal_error",
+                 "request_id": rid},
+        headers={"X-Request-ID": rid},
     )
 
 
@@ -88,11 +119,27 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(partners.router)
 app.include_router(items.router)
+app.include_router(stock.router)
+app.include_router(purchase.router)
+app.include_router(sales.router)
+app.include_router(costing.router)
+app.include_router(payments.router)
+app.include_router(invoices.router)
+app.include_router(stats.router)
+app.include_router(reports.router)
+app.include_router(audit.router)
 
 
 @app.get("/health", tags=["system"])
 def health():
     return {"status": "ok"}
+
+
+@app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
+def metrics():
+    """프로세스 인메모리 요청 카운터(text/plain). 멀티워커에서는 워커별 값이라
+    참고용 — 자세한 이유는 app.observability 주석 참고."""
+    return render_metrics()
 
 
 # ---------- 웹 화면(클라이언트용 UI) ----------

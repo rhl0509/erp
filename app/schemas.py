@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 T = TypeVar("T")
 
@@ -62,10 +62,47 @@ class MeOut(UserOut):
 
 class UserCreate(BaseModel):
     username: str = Field(min_length=2, max_length=50)
-    password: str = Field(min_length=4)
+    password: str = Field(min_length=8)
     full_name: str = ""
     email: str = ""
     role_ids: list[int] = []
+
+
+class RegisterCreate(BaseModel):
+    """공개 회원가입 입력. 역할·활성 여부는 지정 불가(비활성·무권한으로 생성)."""
+    username: str = Field(min_length=2, max_length=50)
+    password: str = Field(min_length=8)
+    full_name: str = ""
+    email: str = ""
+
+
+class UserUpdate(BaseModel):
+    """관리자용 회원 수정(승인=역할 부여 + is_active=true)."""
+    full_name: str | None = None
+    email: str | None = None
+    is_active: bool | None = None
+    role_ids: list[int] | None = None
+
+
+class PasswordChange(BaseModel):
+    """본인 비밀번호 변경. 현재 비밀번호 확인 후 교체."""
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
+
+
+# ---------- 감사 로그 ----------
+class AuditLogOut(BaseModel):
+    """변경 이력 1건. before/after는 저장된 JSON 문자열 그대로(화면에서 파싱)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int | None = None
+    username: str = ""
+    action: str          # CREATE / UPDATE / DELETE
+    entity: str          # user / partner / item / stock
+    entity_id: str = ""
+    before: str | None = None
+    after: str | None = None
+    created_at: datetime
 
 
 # ---------- 거래처 ----------
@@ -77,6 +114,7 @@ class PartnerBase(BaseModel):
     phone: str = ""
     email: str = ""
     address: str = ""
+    credit_limit: int = Field(default=0, ge=0)   # 여신한도(0=무제한)
     is_active: bool = True
 
 
@@ -84,8 +122,17 @@ class PartnerCreate(PartnerBase):
     pass
 
 
-class PartnerUpdate(PartnerBase):
-    pass
+class PartnerUpdate(BaseModel):
+    """부분 수정용. 보낸 필드만 반영한다(누락 필드는 기존 값 유지)."""
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    partner_type: str | None = None
+    business_no: str | None = None
+    ceo_name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    address: str | None = None
+    credit_limit: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
 
 
 class PartnerOut(PartnerBase):
@@ -101,8 +148,10 @@ class ItemBase(BaseModel):
     spec: str = ""
     unit: str = "EA"
     item_type: str = "product"
+    tax_type: str = Field(default="taxable", pattern="^(taxable|exempt)$")  # 과세/면세
     purchase_price: int = 0
     sales_price: int = 0
+    safety_stock: int = Field(default=0, ge=0)  # 0=임계값 미설정(알림 제외)
     is_active: bool = True
 
 
@@ -110,8 +159,17 @@ class ItemCreate(ItemBase):
     pass
 
 
-class ItemUpdate(ItemBase):
-    pass
+class ItemUpdate(BaseModel):
+    """부분 수정용. 보낸 필드만 반영한다(누락 필드는 기존 값 유지)."""
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    spec: str | None = None
+    unit: str | None = None
+    item_type: str | None = None
+    tax_type: str | None = Field(default=None, pattern="^(taxable|exempt)$")
+    purchase_price: int | None = None
+    sales_price: int | None = None
+    safety_stock: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
 
 
 class ItemOut(ItemBase):
@@ -119,3 +177,398 @@ class ItemOut(ItemBase):
     id: int
     code: str
     created_at: datetime
+
+
+# ---------- 재고 ----------
+class StockMovementCreate(BaseModel):
+    item_id: int
+    movement_type: str = Field(pattern="^(IN|OUT|ADJUST)$")
+    quantity: int
+    partner_id: int | None = None
+    unit_price: int = Field(default=0, ge=0)   # 단가는 음수 불가(이동평균·매출 오염 방지)
+    note: str = ""
+
+    @model_validator(mode="after")
+    def check_quantity(self):
+        # IN/OUT은 양수 필수, ADJUST는 부호 있는 증감량(0은 불가)
+        if self.quantity == 0:
+            raise ValueError("수량은 0이 될 수 없습니다.")
+        if self.movement_type in ("IN", "OUT") and self.quantity < 0:
+            raise ValueError("입고/출고 수량은 양수여야 합니다.")
+        return self
+
+
+class StockMovementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    movement_no: str
+    item_id: int
+    item_code: str
+    item_name: str
+    movement_type: str
+    quantity: int
+    partner_id: int | None = None
+    partner_name: str = ""
+    unit_price: int
+    tax_amount: int = 0     # 부가세액(과세 품목의 IN/OUT). 공급가액 = quantity x unit_price
+    note: str = ""
+    created_at: datetime
+
+
+class StockLevelOut(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    unit: str
+    item_type: str
+    on_hand: int
+    safety_stock: int = 0
+    shortage: int = 0  # 안전재고 미달 부족량 = max(safety_stock - on_hand, 0)
+
+
+# ---------- 거래처 매입/매출 내역 ----------
+class PartnerTxnOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    movement_no: str
+    created_at: datetime
+    item_id: int
+    item_code: str
+    item_name: str
+    kind: str          # purchase(매입) / sales(매출)
+    quantity: int
+    unit_price: int
+    amount: int        # 수량 x 단가
+
+
+class PartnerLedgerSummary(BaseModel):
+    purchase_count: int
+    purchase_amount: int
+    sales_count: int
+    sales_amount: int
+
+
+# ---------- 매입/매출 통계 ----------
+class StatMoneyPair(BaseModel):
+    purchase_amount: int   # 매입액
+    sales_amount: int      # 매출액
+
+
+class StatTotal(BaseModel):
+    purchase_amount: int
+    sales_amount: int
+    purchase_count: int
+    sales_count: int
+
+
+class StatMonthly(BaseModel):
+    period: str            # 예: "2026-07"
+    purchase_amount: int
+    sales_amount: int
+
+
+class StatTopPartner(BaseModel):
+    partner_id: int
+    partner_name: str
+    sales_amount: int
+
+
+class SalesPurchaseOverview(BaseModel):
+    total: StatTotal
+    this_month: StatMoneyPair
+    monthly: list[StatMonthly]
+    top_partners: list[StatTopPartner]
+    partner_subtotals: list["TransactionPartnerSubtotal"]  # 거래처별 소계 (전체 누계)
+    item_subtotals: list["TransactionItemSubtotal"]  # 품목별 소계 (전체 누계)
+
+
+# ---------- 매입/매출 내역 (전사 목록) ----------
+class TransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    movement_no: str
+    created_at: datetime
+    kind: str          # purchase(매입) / sales(매출)
+    partner_id: int | None = None
+    partner_name: str = ""
+    item_id: int
+    item_code: str
+    item_name: str
+    quantity: int
+    unit_price: int
+    amount: int        # 수량 x 단가
+
+
+class TransactionPeriod(BaseModel):
+    period: str            # 월별="2026-07", 일별="2026-07-02"
+    purchase_amount: int
+    sales_amount: int
+    purchase_count: int
+    sales_count: int
+
+
+class TransactionPartnerSubtotal(BaseModel):
+    partner_id: int | None = None
+    partner_name: str          # 거래처 없으면 "미지정"
+    purchase_amount: int
+    sales_amount: int
+    purchase_count: int
+    sales_count: int
+
+
+class TransactionItemSubtotal(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    purchase_amount: int
+    sales_amount: int
+    purchase_count: int
+    sales_count: int
+
+
+# ---------- 거래 문서: 발주(구매) / 수주(판매) ----------
+class OrderLineIn(BaseModel):
+    """발주/수주 명세 입력."""
+    item_id: int
+    qty: int = Field(ge=1)
+    unit_price: int = Field(default=0, ge=0)
+
+
+class DocQtyLineIn(BaseModel):
+    """입고/출고 처리 시 라인별 수량."""
+    line_id: int
+    qty: int = Field(ge=1)
+
+
+class ReceiveRequest(BaseModel):
+    """발주 입고 요청(부분 입고 허용)."""
+    lines: list[DocQtyLineIn] = Field(min_length=1)
+
+
+class ShipRequest(BaseModel):
+    """수주 출고 요청(부분 출고 허용)."""
+    lines: list[DocQtyLineIn] = Field(min_length=1)
+
+
+class ReturnRequest(BaseModel):
+    """반품 요청. 라인별 반품 수량(입고/출고 실적 − 기존 반품 이내)."""
+    lines: list[DocQtyLineIn] = Field(min_length=1)
+
+
+class PurchaseOrderCreate(BaseModel):
+    partner_id: int
+    order_date: str = ""     # YYYY-MM-DD (미지정 시 서버가 오늘로 채움)
+    note: str = ""
+    lines: list[OrderLineIn] = []
+
+
+class PurchaseOrderUpdate(BaseModel):
+    """draft 상태에서만 수정 가능. lines 를 주면 명세 전체를 교체한다."""
+    partner_id: int | None = None
+    order_date: str | None = None
+    note: str | None = None
+    lines: list[OrderLineIn] | None = None
+
+
+class PurchaseOrderLineOut(BaseModel):
+    id: int
+    item_id: int
+    item_code: str
+    item_name: str
+    qty: int
+    unit_price: int
+    amount: int            # 공급가액 = qty x unit_price
+    tax_amount: int = 0    # 부가세액(면세 품목은 0)
+    received_qty: int
+    remaining_qty: int     # qty - received_qty
+    returned_qty: int = 0        # 매입반품 누적
+    returnable_qty: int = 0      # 반품 가능 = received_qty - returned_qty
+
+
+class PurchaseOrderOut(BaseModel):
+    id: int
+    po_no: str
+    partner_id: int
+    partner_name: str = ""
+    status: str            # draft/confirmed/partial/received/cancelled
+    order_date: str = ""
+    note: str = ""
+    total_amount: int           # 공급가액 합계 (Σ qty x unit_price)
+    tax_amount: int = 0         # 부가세액 합계
+    grand_total: int = 0        # 합계금액 = 공급가액 + 세액 (VAT 포함)
+    billed_amount: int = 0      # 청구액(입고 실적, VAT 포함) — 채무 발생분
+    paid_amount: int = 0        # 이 발주에 귀속된 지급(AP) 합
+    outstanding: int = 0        # 미지급 = billed_amount - paid_amount (납품 기준, 거래처 잔액과 동일)
+    created_at: datetime
+    lines: list[PurchaseOrderLineOut] = []
+
+
+class SalesOrderCreate(BaseModel):
+    partner_id: int
+    order_date: str = ""
+    note: str = ""
+    lines: list[OrderLineIn] = []
+
+
+class SalesOrderUpdate(BaseModel):
+    partner_id: int | None = None
+    order_date: str | None = None
+    note: str | None = None
+    lines: list[OrderLineIn] | None = None
+
+
+class SalesOrderLineOut(BaseModel):
+    id: int
+    item_id: int
+    item_code: str
+    item_name: str
+    qty: int
+    unit_price: int
+    amount: int            # 공급가액 = qty x unit_price
+    tax_amount: int = 0    # 부가세액(면세 품목은 0)
+    shipped_qty: int
+    remaining_qty: int     # qty - shipped_qty
+    returned_qty: int = 0        # 매출반품 누적
+    returnable_qty: int = 0      # 반품 가능 = shipped_qty - returned_qty
+
+
+class SalesOrderOut(BaseModel):
+    id: int
+    so_no: str
+    partner_id: int
+    partner_name: str = ""
+    status: str            # draft/confirmed/partial/shipped/cancelled
+    order_date: str = ""
+    note: str = ""
+    total_amount: int           # 공급가액 합계 (Σ qty x unit_price)
+    tax_amount: int = 0         # 부가세액 합계
+    grand_total: int = 0        # 합계금액 = 공급가액 + 세액 (VAT 포함)
+    billed_amount: int = 0      # 청구액(출고 실적, VAT 포함) — 채권 발생분
+    paid_amount: int = 0        # 이 수주에 귀속된 수금(AR) 합
+    outstanding: int = 0        # 미수 = billed_amount - paid_amount (납품 기준, 거래처 잔액과 동일)
+    created_at: datetime
+    lines: list[SalesOrderLineOut] = []
+
+
+# ---------- 원가 / 재고평가 / 매출총이익 ----------
+class StockValuationOut(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    unit: str
+    on_hand: int
+    avg_cost: float        # 이동평균 원가
+    value: int             # 재고평가액 = round(on_hand x avg_cost)
+
+
+class ValuationSummary(BaseModel):
+    total_value: int       # 전체 재고평가액
+    item_count: int        # 재고 보유(on_hand>0) 품목 수
+
+
+class MarginSummary(BaseModel):
+    revenue: int           # 매출액 (출고 수량 x 판매단가)
+    cogs: int              # 매출원가 (출고 수량 x 이동평균원가)
+    gross_profit: int      # 매출총이익 = revenue - cogs
+    margin_rate: float     # 매출총이익률 (gross_profit / revenue), 매출 0이면 0
+    sales_count: int       # 출고 건수
+
+
+# ---------- 회계: 결제/수금 (AR/AP) ----------
+class PaymentCreate(BaseModel):
+    partner_id: int
+    kind: str = Field(pattern="^(AP|AR)$")   # AP=지급, AR=수금
+    amount: int = Field(gt=0)
+    pay_date: str = ""                        # YYYY-MM-DD (미지정 시 오늘)
+    method: str = ""                          # 계좌이체/현금/카드/기타
+    note: str = ""
+    ref_type: str = Field(default="", pattern="^(|PO|SO)$")   # 문서 귀속(선택)
+    ref_id: int | None = None
+
+
+class PaymentOut(BaseModel):
+    id: int
+    payment_no: str
+    partner_id: int
+    partner_name: str = ""
+    kind: str
+    amount: int
+    pay_date: str = ""
+    method: str = ""
+    note: str = ""
+    ref_type: str = ""
+    ref_id: int | None = None
+    created_at: datetime
+
+
+class PartnerBalanceOut(BaseModel):
+    partner_id: int
+    partner_name: str
+    purchase_amount: int   # 매입 총액(청구, VAT 포함 = 공급가액 + 세액)
+    purchase_tax: int      # 매입 부가세액
+    ap_paid: int           # 지급 합
+    ap_outstanding: int    # 미지급 = purchase_amount - ap_paid
+    sales_amount: int      # 매출 총액(청구, VAT 포함 = 공급가액 + 세액)
+    sales_tax: int         # 매출 부가세액
+    ar_collected: int      # 수금 합
+    ar_outstanding: int    # 미수 = sales_amount - ar_collected
+    credit_limit: int      # 여신한도(0=무제한)
+    credit_available: int  # 여신 가용 = credit_limit - ar_outstanding (한도 없으면 0)
+
+
+# ---------- 여신 · Aging(연령분석) ----------
+class AgingBucket(BaseModel):
+    partner_id: int
+    partner_name: str
+    b_0_30: int            # 경과 0~30일
+    b_31_60: int           # 31~60일
+    b_61_90: int           # 61~90일
+    b_over_90: int         # 90일 초과
+    total: int             # 미결제 잔액 합
+
+
+class AgingReport(BaseModel):
+    kind: str              # AR(미수)/AP(미지급)
+    as_of: str             # 기준일 YYYY-MM-DD
+    buckets: list[AgingBucket] = []
+    total: int = 0         # 전체 미결제 합
+
+
+# ---------- 세금계산서 ----------
+class TaxInvoiceCreate(BaseModel):
+    """발주(PO)/수주(SO)에서 세금계산서를 발행한다."""
+    ref_type: str = Field(pattern="^(PO|SO)$")   # PO=매입계산서, SO=매출계산서
+    ref_id: int
+    issue_date: str = ""                          # YYYY-MM-DD (미지정 시 오늘)
+    note: str = ""
+
+
+class TaxInvoiceLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    item_name: str
+    spec: str = ""
+    qty: int
+    unit_price: int
+    supply_amount: int
+    tax_amount: int
+
+
+class TaxInvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    invoice_no: str
+    kind: str              # sales / purchase
+    ref_type: str = ""
+    ref_id: int | None = None
+    partner_id: int
+    partner_name: str = ""
+    partner_business_no: str = ""
+    issue_date: str = ""
+    supply_amount: int
+    tax_amount: int
+    total_amount: int
+    status: str
+    note: str = ""
+    created_at: datetime
+    lines: list[TaxInvoiceLineOut] = []

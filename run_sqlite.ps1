@@ -12,7 +12,7 @@ if (-not $root) { $root = (Get-Location).Path }
 Set-Location $root
 
 $env:DATABASE_URL = "sqlite:///./erp_dev.db"
-$env:JWT_SECRET   = "local-dev-secret-please-change-this-32bytes"
+$env:JWT_SECRET   = "local-dev-only-secret-0123456789abcdef"
 
 # 가상환경 파이썬
 $py = Join-Path $root ".venv\Scripts\python.exe"
