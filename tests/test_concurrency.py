@@ -21,8 +21,13 @@ pytestmark = pytest.mark.skipif(not MYSQL_URL, reason="TEST_MYSQL_URL 미설정 
 
 def _seed_default_warehouse(db):
     """create_all 은 마이그레이션의 기본창고 INSERT 를 거치지 않으므로 직접 만든다.
-    (창고 미지정 post_movement 호출이 기본창고로 해석되기 위한 전제.)"""
+    (창고 미지정 post_movement 호출이 기본창고로 해석되기 위한 전제.)
+    GL 계정도 함께 시드한다 — post_movement 훅이 전기하는데, 계정 지연 생성이
+    스레드마다 다른 순서로 일어나면 unique(code) 락 교차로 교착할 수 있어
+    운영(마이그레이션 시드)과 동일하게 선시드가 전제다."""
     from app.models import Warehouse
+    from app.gl import ensure_accounts
+    ensure_accounts(db)
     wh = Warehouse(code="MAIN", name="기본창고", is_default=True)
     db.add(wh)
     db.flush()
@@ -177,6 +182,81 @@ def test_concurrent_movements_unique_no_and_no_deadlock():
 
     assert db_total == db_distinct == N + 1, f"DB 이동 {db_total}건 / 유니크 번호 {db_distinct}건"
     assert last_seq == N + 1, f"last_seq={last_seq} (기대 {N + 1})"
+
+
+def test_concurrent_movements_gl_posting_consistent():
+    """GL 전기 훅 동시성: 같은 트랜잭션 전기가 동시 입출고를 깨지 않고,
+    (a) 이동 1건=전표 1건(멱등 UNIQUE), (b) 전표번호(JV) 전부 유니크,
+    (c) 모든 전표 차대 균형, (d) GL 재고 == valuation 재대사가 유지된다."""
+    from app.database import Base
+    from app import models  # noqa: F401  (매퍼 등록)
+    from app.models import Item, StockMovement, JournalEntry, JournalLine
+    from app.services import post_movement, generate_code
+    from app.gl import reconcile
+
+    engine = create_engine(MYSQL_URL, isolation_level="READ COMMITTED", pool_size=20, max_overflow=20)
+    Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    db = Session()
+    _seed_default_warehouse(db)
+    it = Item(code=generate_code(db, "ITEM", "I"), name="GL동시품", unit="EA")
+    db.add(it); db.flush()
+    post_movement(db, item_id=it.id, movement_type="IN", quantity=1000, unit_price=100)
+    db.commit()
+    item_id = it.id
+    db.close()
+
+    N = 16
+    errors: list[str] = []
+    lk = threading.Lock()
+
+    def move(i: int):
+        db = Session()
+        try:
+            mtype = "IN" if i % 2 == 0 else "OUT"   # 입출고 혼합(잔고+채번 경합)
+            post_movement(db, item_id=item_id, movement_type=mtype,
+                          quantity=1, unit_price=100)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            with lk:
+                errors.append(repr(e))
+        finally:
+            db.close()
+
+    threads = [threading.Thread(target=move, args=(i,)) for i in range(N)]
+    for t in threads: t.start()
+    for t in threads: t.join()
+
+    assert not errors, f"GL 훅 하의 동시 입출고 실패: {errors}"
+
+    db = Session()
+    # (a) 이동 1건 = 전표 1건 (셋업 IN 포함 N+1)
+    mv_count = db.execute(select(func.count(StockMovement.id))).scalar_one()
+    je_total, je_distinct_src, je_distinct_no = db.execute(
+        select(func.count(JournalEntry.id),
+               func.count(func.distinct(JournalEntry.source_id)),
+               func.count(func.distinct(JournalEntry.entry_no)))
+        .where(JournalEntry.source_type == "MOVEMENT")
+    ).one()
+    assert mv_count == N + 1
+    # (b) 전표 수·원천 매핑·전표번호 전부 N+1 (중복/누락 없음)
+    assert je_total == je_distinct_src == je_distinct_no == N + 1, \
+        f"전표 {je_total} / 원천 {je_distinct_src} / 번호 {je_distinct_no}"
+    # (c) 차대 불균형 전표가 없어야 한다
+    unbalanced = db.execute(
+        select(JournalLine.entry_id)
+        .group_by(JournalLine.entry_id)
+        .having(func.sum(JournalLine.debit) != func.sum(JournalLine.credit))
+    ).all()
+    assert not unbalanced, f"차대 불균형 전표: {unbalanced}"
+    # (d) 재대사: GL 재고 == Σ on_hand×avg_cost, 시산표 균형
+    rec = reconcile(db)
+    db.close()
+    engine.dispose()
+    assert rec["ok"], f"재대사 불일치: {rec}"
 
 
 def test_concurrent_different_warehouses_no_cross_block():

@@ -327,6 +327,73 @@ class TaxInvoiceLine(Base):
     invoice: Mapped["TaxInvoice"] = relationship(back_populates="lines")
 
 
+# ---------- 회계: 총계정원장(GL) ----------
+# 설계: docs/gl-design.md — 전기형(B). 모든 전표는 원천 행(StockMovement/Payment)의
+# 결정적 함수라 언제든 rebuild(app/gl.py)로 재생성 가능하다.
+class Account(Base, TimestampMixin):
+    """계정과목 마스터. 4자리 코드, 첫 자리=대분류. 시드 12계정 고정(§3) —
+    사용자 편집 UI는 범위 밖이라 코드로만 관리한다."""
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(10), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    # asset(자산)/liability(부채)/equity(자본)/revenue(수익)/expense(비용)
+    account_type: Mapped[str] = mapped_column(String(10))
+    # 정상잔액 방향: debit(차변) / credit(대변) — 원장·시산표 잔액 부호 표시용
+    normal_side: Mapped[str] = mapped_column(String(6))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class JournalEntry(Base, TimestampMixin):
+    """분개 전표(헤더). (source_type, source_id) UNIQUE 로 원천 1행=전표 1건
+    멱등성을 보장한다. 원천 삭제 시 전표 동반 삭제(§9-4), 자동 전기는 항상
+    posted 단일 상태(draft 워크플로 범위 밖)."""
+    __tablename__ = "journal_entries"
+    __table_args__ = (
+        UniqueConstraint("source_type", "source_id", name="uq_journal_entries_source"),
+        Index("ix_journal_entries_entry_date", "entry_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entry_no: Mapped[str] = mapped_column(String(30), unique=True, index=True)  # JV-YYYYMM-####
+    entry_date: Mapped[str] = mapped_column(String(10), default="")   # YYYY-MM-DD (기존 관행)
+    description: Mapped[str] = mapped_column(String(255), default="")
+    source_type: Mapped[str] = mapped_column(String(10))   # MOVEMENT / PAYMENT / MANUAL
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # MANUAL 이면 NULL
+    status: Mapped[str] = mapped_column(String(10), default="posted", server_default="posted")
+
+    lines: Mapped[list["JournalLine"]] = relationship(
+        back_populates="entry", lazy="selectin",
+        cascade="all, delete-orphan", order_by="JournalLine.line_no",
+    )
+
+
+class JournalLine(Base):
+    """분개 라인. 차/대 분리 컬럼(표준 관행), 금액은 NUMERIC(18,4) —
+    COGS(qty×이동평균)가 Decimal 이라 StockMovement.cost 정밀도 정책과 맞춘다.
+    차대 합 일치(Σdebit==Σcredit)·0원 라인 금지는 서비스(app/gl.py)가 강제한다."""
+    __tablename__ = "journal_lines"
+    __table_args__ = (
+        Index("ix_journal_lines_account_entry", "account_id", "entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entry_id: Mapped[int] = mapped_column(
+        ForeignKey("journal_entries.id", ondelete="CASCADE"), index=True
+    )
+    line_no: Mapped[int] = mapped_column(Integer, default=1)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
+    debit: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"), server_default="0")
+    credit: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"), server_default="0")
+    # AR/AP 라인의 보조원장 차원(거래처별 잔액·aging 대사용)
+    partner_id: Mapped[int | None] = mapped_column(ForeignKey("partners.id"), nullable=True)
+    memo: Mapped[str] = mapped_column(String(255), default="")
+
+    entry: Mapped["JournalEntry"] = relationship(back_populates="lines")
+    account: Mapped["Account"] = relationship(lazy="selectin")
+
+
 # ---------- 회계: 결제/수금 (미지급·미수 상계) ----------
 class Payment(Base, TimestampMixin):
     """AP=공급처에 지급(미지급 차감), AR=고객에게서 수금(미수 차감).

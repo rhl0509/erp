@@ -620,3 +620,103 @@ class TaxInvoiceOut(BaseModel):
     note: str = ""
     created_at: datetime
     lines: list[TaxInvoiceLineOut] = []
+
+
+# ---------- 총계정원장(GL) — docs/gl-design.md §7 ----------
+class JournalLineOut(BaseModel):
+    id: int
+    line_no: int
+    account_code: str
+    account_name: str
+    debit: float
+    credit: float
+    partner_id: int | None = None
+    partner_name: str = ""
+    memo: str = ""
+
+
+class JournalEntryOut(BaseModel):
+    id: int
+    entry_no: str
+    entry_date: str
+    description: str = ""
+    source_type: str          # MOVEMENT / PAYMENT / MANUAL — 원천 문서 딥링크용
+    source_id: int | None = None
+    status: str = "posted"
+    created_at: datetime
+    lines: list[JournalLineOut] = []
+
+
+class LedgerLineOut(BaseModel):
+    """계정별원장 1행(전표 라인 + 러닝밸런스)."""
+    entry_id: int
+    entry_no: str
+    entry_date: str
+    description: str = ""
+    source_type: str
+    source_id: int | None = None
+    debit: float
+    credit: float
+    balance: float            # 정상잔액 방향 기준 러닝밸런스
+
+
+class LedgerOut(BaseModel):
+    account_code: str
+    account_name: str
+    account_type: str
+    normal_side: str          # debit/credit — balance 부호 해석 기준
+    date_from: str | None = None
+    date_to: str | None = None
+    opening_balance: float    # 기초잔액(date_from 이전 누계, 정상잔액 방향)
+    total_debit: float        # 기간 차변 합
+    total_credit: float       # 기간 대변 합
+    closing_balance: float    # 기말잔액 = 기초 + 기간 증감
+    lines: list[LedgerLineOut] = []
+
+
+class TrialBalanceRow(BaseModel):
+    account_code: str
+    account_name: str
+    account_type: str
+    normal_side: str
+    debit_total: float
+    credit_total: float
+    balance: float            # 정상잔액 방향 기준(차변계정=차−대, 대변계정=대−차)
+
+
+class TrialBalanceOut(BaseModel):
+    date_from: str | None = None
+    date_to: str | None = None
+    rows: list[TrialBalanceRow] = []
+    total_debit: float
+    total_credit: float
+    balanced: bool            # Σ차변 == Σ대변
+
+
+class ReconcileItem(BaseModel):
+    """GL 총계 vs 기존 보조원장(원천 파생값) 대조 1항목."""
+    gl: float
+    expected: float
+    diff: float
+    ok: bool
+
+
+class ReconcileTrial(BaseModel):
+    debit: float
+    credit: float
+    ok: bool
+
+
+class ReconcileOut(BaseModel):
+    inventory: ReconcileItem   # 1130 vs Σ on_hand×avg_cost (valuation)
+    ar: ReconcileItem          # 1120 vs 매출청구 − 수금
+    ap: ReconcileItem          # 2110 vs 매입청구 − 지급
+    trial: ReconcileTrial      # 시산표 차대 균형
+    ok: bool
+
+
+class GLRebuildOut(BaseModel):
+    movement_entries: int
+    payment_entries: int
+    total_entries: int
+    reconcile: ReconcileOut

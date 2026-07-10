@@ -13,6 +13,7 @@ from ..services import (
     record_audit, paginate, post_movement, post_transfer,
     apply_stock_delta, _signed_delta, StockError,
 )
+from ..gl import delete_for_source
 
 router = APIRouter(prefix="/api/stock", tags=["stock"])
 
@@ -220,6 +221,8 @@ def delete_movement(
     except StockError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # 원천 삭제 시 전표 동반 삭제(같은 트랜잭션) — 삭제 이력은 AuditLog 가 담당.
+    delete_for_source(db, "MOVEMENT", movement.id)
     db.delete(movement)
     record_audit(db, user, "DELETE", "stock", movement_id, before=before)
     db.commit()

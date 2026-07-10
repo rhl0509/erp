@@ -98,15 +98,16 @@ def generate_code(
     return "-".join(parts)
 
 
-def generate_movement_no(db: Session, width: int = 4) -> str:
-    """STOCK 이동번호 채번(고빈도 경로, 결번 허용). 포맷: STK-YYYYMM-####.
+def generate_no_lock_split(db: Session, seq_key: str, prefix: str, width: int = 4) -> str:
+    """고빈도 채번(락 분리, 결번 허용). 포맷: {PREFIX}-YYYYMM-####.
 
-    문제(병목): 모든 입출고가 전역 단일 시퀀스 행을 FOR UPDATE 로 잠근 채 비즈니스
-    트랜잭션(잔고 갱신+이동 insert) 커밋까지 락을 쥐면 전체 입출고가 직렬화된다.
+    문제(병목): 모든 요청이 전역 단일 시퀀스 행을 FOR UPDATE 로 잠근 채 비즈니스
+    트랜잭션 커밋까지 락을 쥐면 해당 경로 전체가 직렬화된다.
     완화(락 분리): 채번만 메인 세션과 별개의 새 세션(autonomous 트랜잭션)에서
     수행하고 즉시 커밋해, 전역 락을 last_seq 증분 순간에만 잡는다. 이후 비즈니스
-    트랜잭션이 롤백하면 그 번호는 결번(gap)이 되는데, 내부 이동번호라 허용한다
+    트랜잭션이 롤백하면 그 번호는 결번(gap)이 되는데, 내부 번호라 허용한다
     (사용자 확정 결정 — gapless 가 필요한 저빈도 채번은 generate_code 유지).
+    이동번호(STOCK)와 GL 전표번호(JE, app/gl.py)가 이 패턴을 공유한다.
 
     다이얼렉트 분기(중요): SQLite 는 파일 레벨 단일 쓰기락이라, 메인 트랜잭션이
     이미 잔고 UPDATE 로 쓰기락을 쥔 상태에서 두 번째 커넥션이 쓰기를 시도하면
@@ -116,7 +117,7 @@ def generate_movement_no(db: Session, width: int = 4) -> str:
     """
     bind = db.get_bind()
     if bind.dialect.name == "sqlite":
-        return generate_code(db, "STOCK", "STK", use_period=True, width=width)
+        return generate_code(db, seq_key, prefix, use_period=True, width=width)
 
     period = datetime.now().strftime("%Y%m")
     # 메인 세션과 같은 엔진(커넥션 풀)에서 새 세션을 연다. 요청당 커넥션을 잠깐
@@ -125,7 +126,7 @@ def generate_movement_no(db: Session, width: int = 4) -> str:
     engine = getattr(bind, "engine", bind)  # Connection 이 반환돼도 Engine 으로 환원
     seq_db = Session(bind=engine, autoflush=False)
     try:
-        row = _acquire_seq_row(seq_db, "STOCK", "STK", period)
+        row = _acquire_seq_row(seq_db, seq_key, prefix, period)
         row.last_seq += 1
         seq = row.last_seq
         seq_db.commit()  # 즉시 커밋 → 시퀀스 행 락을 바로 푼다(락 분리의 핵심)
@@ -135,7 +136,12 @@ def generate_movement_no(db: Session, width: int = 4) -> str:
     finally:
         seq_db.close()
 
-    return "-".join(["STK", period, str(seq).zfill(width)])
+    return "-".join([prefix, period, str(seq).zfill(width)])
+
+
+def generate_movement_no(db: Session, width: int = 4) -> str:
+    """STOCK 이동번호 채번(고빈도, 결번 허용). 포맷: STK-YYYYMM-####."""
+    return generate_no_lock_split(db, "STOCK", "STK", width=width)
 
 
 def get_default_warehouse_id(db: Session) -> int:
@@ -275,6 +281,13 @@ def post_movement(
     )
     db.add(movement)
     db.flush()
+
+    # GL 전기(같은 트랜잭션, docs/gl-design.md §2): 이동이 성공하면 전표도 반드시
+    # 함께 생기고, 실패하면 이동째 롤백된다. 훅을 라우터가 아닌 이 단일 진입점에
+    # 두어 어떤 경로(수기/PO/SO)로 이동이 생겨도 자동 전기된다. TRANSFER 등
+    # 무전기 사건 판별은 gl 이 담당한다. (지연 임포트: gl 이 services 채번을 쓴다)
+    from . import gl
+    gl.post_for_movement(db, movement, avg_cost=avg_cost)
     return movement
 
 
@@ -328,6 +341,12 @@ def post_return(
     )
     db.add(movement)
     db.flush()
+
+    # GL 전기(같은 트랜잭션). 매입반품(§4-C)은 재고 대변을 '반품 시점 이동평균'으로
+    # 잡아야 하는데 movement.cost 에는 매입단가가 저장되므로, 여기서 확보한
+    # avg_cost(평균 불변이라 반품 전=후 동일)를 반드시 전달한다.
+    from . import gl
+    gl.post_for_movement(db, movement, avg_cost=avg_cost)
     return movement
 
 

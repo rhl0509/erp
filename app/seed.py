@@ -21,6 +21,7 @@ from . import models  # noqa: F401
 from .models import User, Role, Permission, Partner, Item, StockMovement, Warehouse
 from .security import hash_password
 from .services import generate_code, post_movement
+from .gl import ensure_accounts
 
 PERMISSIONS = [
     ("*", "전체 권한 (슈퍼관리자)"),
@@ -149,6 +150,10 @@ def run():
         if not db.execute(select(Warehouse).where(Warehouse.is_default.is_(True))).scalars().first():
             main_wh.is_default = True
             db.flush()
+
+        # 5.5) GL 계정과목 12개 시드(멱등, 마이그레이션 시드와 동일 내용).
+        #      아래 샘플 입고가 GL 전기를 유발하므로 계정이 먼저 있어야 한다.
+        ensure_accounts(db)
 
         # 6) 샘플 마스터 데이터
         if not db.execute(select(Partner)).scalars().first():

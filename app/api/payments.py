@@ -9,6 +9,7 @@ from ..models import Payment, Partner, PurchaseOrder, SalesOrder, User
 from ..schemas import PaymentCreate, PaymentOut, Page
 from ..deps import require_permission
 from ..services import generate_code, record_audit, paginate, compute_tax
+from ..gl import post_for_payment, delete_for_source
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
@@ -124,6 +125,8 @@ def create_payment(
     )
     db.add(payment)
     db.flush()
+    # GL 전기(같은 트랜잭션): AP 지급=외상매입금 차감, AR 수금=외상매출금 차감.
+    post_for_payment(db, payment)
     record_audit(db, user, "CREATE", "payment", payment.id,
                  after={"payment_no": payment.payment_no, "kind": payment.kind, "amount": payment.amount})
     db.commit()
@@ -153,6 +156,8 @@ def delete_payment(
     if not p:
         raise HTTPException(status_code=404, detail="결제 내역을 찾을 수 없습니다")
     before = {"payment_no": p.payment_no, "kind": p.kind, "amount": p.amount}
+    # 원천 삭제 시 전표 동반 삭제(같은 트랜잭션) — 삭제 이력은 AuditLog 가 담당.
+    delete_for_source(db, "PAYMENT", p.id)
     db.delete(p)
     record_audit(db, user, "DELETE", "payment", payment_id, before=before)
     db.commit()
