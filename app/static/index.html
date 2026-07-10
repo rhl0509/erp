@@ -277,6 +277,7 @@
       <button data-page="partners">거래처</button>
       <button data-page="items">품목</button>
       <button data-page="stock" data-perm="stock:read">재고<span class="cnt" id="stockAlertCnt" style="display:none"></span></button>
+      <button data-page="warehouses" data-perm="stock:read">창고</button>
       <button data-page="purchase" data-perm="purchase:read">발주</button>
       <button data-page="sales" data-perm="sales:read">수주</button>
       <button data-page="transactions" data-perm="stock:read">매입/매출</button>
@@ -471,6 +472,7 @@
             <option value="">전체</option>
             <option value="1">재고 없음만</option>
           </select>
+          <select id="slWh" title="창고 필터"><option value="">전체 창고</option></select>
         </div>
         <table>
           <thead><tr>
@@ -490,17 +492,48 @@
             <option value="IN">입고</option>
             <option value="OUT">출고</option>
             <option value="ADJUST">조정</option>
+            <option value="TRANSFER">이전</option>
           </select>
+          <select id="smWh" title="창고 필터"><option value="">전체 창고</option></select>
           <div class="spacer"></div>
+          <button class="btn ghost" id="stTransferBtn" data-perm="stock:write">창고간 이전</button>
           <button class="btn" id="smAddBtn" data-perm="stock:write">+ 입출고 등록</button>
         </div>
         <table>
           <thead><tr>
-            <th>번호</th><th>품목</th><th>구분</th><th class="num">수량</th><th>거래처</th><th class="num">단가</th><th>일자</th><th></th>
+            <th>번호</th><th>품목</th><th>구분</th><th class="num">수량</th><th>거래처</th><th>창고</th><th class="num">단가</th><th>일자</th><th></th>
           </tr></thead>
           <tbody id="smBody"></tbody>
         </table>
         <div class="pager" id="smPager"></div>
+      </div>
+    </section>
+
+    <!-- 창고 -->
+    <section id="warehouses" class="page">
+      <div class="page-head">
+        <div>
+          <h2 class="title">창고 관리</h2>
+          <p class="subtitle">다중창고 마스터를 관리합니다. 기본창고는 항상 1개이며 비활성화할 수 없고, 다른 창고를 기본으로 지정해 교체합니다.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="toolbar">
+          <input type="text" id="whSearch" placeholder="이름 또는 코드 검색" />
+          <select id="whActive">
+            <option value="">전체</option>
+            <option value="1">활성만</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn" id="whAddBtn" data-perm="stock:write">+ 창고 등록</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>코드</th><th>이름</th><th>기본</th><th>상태</th><th></th>
+          </tr></thead>
+          <tbody id="whBody"></tbody>
+        </table>
+        <div class="pager" id="whPager"></div>
       </div>
     </section>
 
@@ -655,7 +688,10 @@
         <div class="stat"><div class="k">매출총이익</div><div class="v" id="valGross" style="font-size:var(--t-xl)">-</div><div class="foot"><span>이익률 <span id="valRate">-</span></span></div></div>
       </div>
       <div class="panel">
-        <div class="toolbar"><input type="text" id="valSearch" placeholder="품목 검색" /></div>
+        <div class="toolbar">
+          <input type="text" id="valSearch" placeholder="품목 검색" />
+          <select id="valWh" title="창고 필터"><option value="">전체 창고</option></select>
+        </div>
         <table>
           <thead><tr><th>코드</th><th>품목</th><th class="num">현재고</th><th class="num">평균원가</th><th class="num">평가액</th></tr></thead>
           <tbody id="valBody"></tbody>
@@ -774,6 +810,7 @@
             <option value="partner">거래처</option>
             <option value="item">품목</option>
             <option value="stock">재고</option>
+            <option value="warehouse">창고</option>
           </select>
           <input type="date" id="aFrom" title="시작일">
           <input type="date" id="aTo" title="종료일">
@@ -956,7 +993,7 @@ async function boot(){
   refreshStockAlertBadge();
   refreshPendingBadge();
   const start = (location.hash || "").replace(/^#/, "");
-  go(["dashboard","partners","items","stock","transactions","users","audit","me"].includes(start) ? start : "dashboard");
+  go(["dashboard","partners","items","stock","warehouses","transactions","users","audit","me"].includes(start) ? start : "dashboard");
 }
 
 $$(".nav button").forEach(b => b.addEventListener("click", ()=>go(b.dataset.page)));
@@ -970,11 +1007,12 @@ function go(page){
   if(page==="dashboard") loadDashboard();
   if(page==="partners") loadPartners();
   if(page==="items") loadItems();
-  if(page==="stock") loadStock();
+  if(page==="stock"){ populateWarehouseFilter("#slWh"); populateWarehouseFilter("#smWh"); loadStock(); }
+  if(page==="warehouses") loadWarehouses();
   if(page==="purchase") loadPurchaseOrders();
   if(page==="sales") loadSalesOrders();
   if(page==="transactions") loadTransactions();
-  if(page==="valuation") loadValuation();
+  if(page==="valuation"){ populateWarehouseFilter("#valWh"); loadValuation(); }
   if(page==="payments"){ populateBalPartners(); loadPayments(); }
   if(page==="aging"){
     const d = $("#agAsOf");
@@ -1360,13 +1398,16 @@ function openItemForm(it){
 const slState = {page:1, q:"", low:""};
 const smState = {page:1, q:"", type:""};
 const saState = {page:1};
-const MTYPE_TAG = {IN:["cust","입고"], OUT:["supp","출고"], ADJUST:["gray","조정"]};
+const MTYPE_TAG = {IN:["cust","입고"], OUT:["supp","출고"], ADJUST:["gray","조정"], TRANSFER:["gray","이전"]};
 
 $("#slSearch").addEventListener("input", debounce(()=>{ slState.q=$("#slSearch").value.trim(); slState.page=1; loadStockLevels(); }, 300));
 $("#slLow").addEventListener("change", ()=>{ slState.low=$("#slLow").value; slState.page=1; loadStockLevels(); });
+$("#slWh").addEventListener("change", ()=>{ slState.page=1; loadStockLevels(); });
 $("#smSearch").addEventListener("input", debounce(()=>{ smState.q=$("#smSearch").value.trim(); smState.page=1; loadStockMovements(); }, 300));
 $("#smType").addEventListener("change", ()=>{ smState.type=$("#smType").value; smState.page=1; loadStockMovements(); });
+$("#smWh").addEventListener("change", ()=>{ smState.page=1; loadStockMovements(); });
 $("#smAddBtn").addEventListener("click", ()=> openStockForm());
+$("#stTransferBtn").addEventListener("click", ()=> openTransferForm());
 
 function loadStock(){ loadStockAlerts(); loadStockLevels(); loadStockMovements(); }
 
@@ -1406,6 +1447,7 @@ async function loadStockLevels(){
   const qs = new URLSearchParams({page:slState.page, page_size:10});
   if(slState.q) qs.set("q", slState.q);
   if(slState.low) qs.set("low_only", "true");
+  if($("#slWh").value) qs.set("warehouse_id", $("#slWh").value);   // 미지정 시 전 창고 합산
   try{
     const data = await api("/api/stock/levels?"+qs);
     $("#slBody").innerHTML = data.items.length ? data.items.map(x=>`
@@ -1426,6 +1468,7 @@ async function loadStockMovements(){
   const qs = new URLSearchParams({page:smState.page, page_size:10});
   if(smState.q) qs.set("q", smState.q);
   if(smState.type) qs.set("movement_type", smState.type);
+  if($("#smWh").value) qs.set("warehouse_id", $("#smWh").value);
   try{
     const data = await api("/api/stock/movements?"+qs);
     const tag = ([cls,label]) => `<span class="tag ${cls}">${label}</span>`;
@@ -1436,12 +1479,13 @@ async function loadStockMovements(){
         <td>${tag(MTYPE_TAG[m.movement_type]||["gray",m.movement_type])}</td>
         <td class="num">${won(m.quantity)}</td>
         <td>${esc(m.partner_name)||"-"}</td>
+        <td>${esc(m.warehouse_name)||"-"}</td>
         <td class="num">${won(m.unit_price)}</td>
         <td>${esc((m.created_at||"").slice(0,10))}</td>
         <td><div class="row-actions">
-          ${can("stock:write")?`<button class="btn danger sm" onclick='delMovement(${m.id},"${esc(m.movement_no)}")'>삭제</button>`:""}
+          ${can("stock:write") && m.movement_type!=="TRANSFER" ? `<button class="btn danger sm" onclick='delMovement(${m.id},"${esc(m.movement_no)}")'>삭제</button>`:""}
         </div></td>
-      </tr>`).join("") : emptyRow(8);
+      </tr>`).join("") : emptyRow(9);
     renderPager("#smPager", data, smState, loadStockMovements);
   }catch(err){ toast(err.message, true); }
 }
@@ -1453,14 +1497,16 @@ async function delMovement(id, no){
 }
 
 async function openStockForm(){
-  let items = [], partners = [];
+  let items = [], partners = [], whs = [];
   try{
-    const [ir, pr] = await Promise.all([
+    const [ir, pr, wr] = await Promise.all([
       api("/api/items?page=1&page_size=100"),
       api("/api/partners?page=1&page_size=100"),
+      api("/api/warehouses?active_only=true&page=1&page_size=100"),
     ]);
-    items = ir.items; partners = pr.items;
+    items = ir.items; partners = pr.items; whs = wr.items;
   }catch(err){ toast(err.message, true); return; }
+  const defWh = whs.find(w=>w.is_default) || whs[0];
   const fields = [
     {k:"item_id", label:"품목 *", type:"select",
      opts:items.map(i=>[String(i.id), `${esc(i.name)} (${esc(i.code)})`])},
@@ -1468,6 +1514,9 @@ async function openStockForm(){
     {k:"quantity", label:"수량 *", type:"number", default:1},
     {k:"partner_id", label:"거래처", type:"select",
      opts:[["","(선택 안 함)"], ...partners.map(p=>[String(p.id), `${esc(p.name)} (${esc(p.code)})`])]},
+    {k:"warehouse_id", label:"창고", type:"select",
+     opts:whs.map(w=>[String(w.id), `${esc(w.name)} (${esc(w.code)})${w.is_default?" · 기본":""}`]),
+     default: defWh ? String(defWh.id) : ""},
     {k:"unit_price", label:"단가", type:"number", default:0},
     {k:"note", label:"비고", full:true},
   ];
@@ -1476,10 +1525,169 @@ async function openStockForm(){
     payload.quantity = Number(payload.quantity)||0;
     payload.unit_price = Number(payload.unit_price)||0;
     payload.partner_id = payload.partner_id ? Number(payload.partner_id) : null;
+    payload.warehouse_id = payload.warehouse_id ? Number(payload.warehouse_id) : null;  // 미지정 시 기본창고
     await api("/api/stock/movements", {method:"POST", body:payload});
     toast("등록했습니다.");
     loadStock();
   });
+}
+
+//==================== 창고 ====================
+const whState = {page:1, q:"", active:""};
+let _whs = {};          // 목록 페이지 캐시(수정 모달용)
+let _activeWhs = null;  // 활성 창고 캐시(셀렉트 채우기용)
+
+$("#whSearch").addEventListener("input", debounce(()=>{ whState.q=$("#whSearch").value.trim(); whState.page=1; loadWarehouses(); }, 300));
+$("#whActive").addEventListener("change", ()=>{ whState.active=$("#whActive").value; whState.page=1; loadWarehouses(); });
+$("#whAddBtn").addEventListener("click", ()=> openWarehouseForm(null));
+
+async function fetchActiveWarehouses(){
+  if(_activeWhs) return _activeWhs;
+  const data = await api("/api/warehouses?active_only=true&page=1&page_size=100");
+  _activeWhs = data.items;
+  return _activeWhs;
+}
+
+// 창고 변경 후 캐시·필터 셀렉트를 무효화해 다음 진입 시 다시 채운다
+function invalidateWarehouseCaches(){
+  _activeWhs = null;
+  ["#slWh","#smWh","#valWh"].forEach(sel=>{ const el=$(sel); if(el) delete el.dataset.filled; });
+}
+
+// 재고/평가 화면의 창고 필터 셀렉트 채우기(전체=전 창고 합산). 기존 선택은 유지한다.
+async function populateWarehouseFilter(sel){
+  const el = $(sel);
+  if(!el || el.dataset.filled) return;
+  try{
+    const ws = await fetchActiveWarehouses();
+    const prev = el.value;
+    el.innerHTML = `<option value="">전체 창고</option>` +
+      ws.map(w=>`<option value="${w.id}">${esc(w.name)} (${esc(w.code)})${w.is_default?" · 기본":""}</option>`).join("");
+    el.value = prev && ws.some(w=>String(w.id)===prev) ? prev : "";
+    el.dataset.filled = "1";
+  }catch(_){ /* 필터는 실패해도 화면을 막지 않는다 */ }
+}
+
+async function loadWarehouses(){
+  const qs = new URLSearchParams({page:whState.page, page_size:10});
+  if(whState.q) qs.set("q", whState.q);
+  if(whState.active) qs.set("active_only", "true");
+  try{
+    const data = await api("/api/warehouses?"+qs);
+    _whs = {}; data.items.forEach(w=>_whs[w.id]=w);
+    $("#whBody").innerHTML = data.items.length ? data.items.map(w=>`
+      <tr>
+        <td class="code">${esc(w.code)}</td>
+        <td>${esc(w.name)}</td>
+        <td>${w.is_default?'<span class="tag both">기본</span>':'<span class="muted">-</span>'}</td>
+        <td>${w.is_active?'<span class="tag">활성</span>':'<span class="tag gray">비활성</span>'}</td>
+        <td><div class="row-actions">
+          ${can("stock:write")?`${!w.is_default && w.is_active ? `<button class="btn sm" onclick='setDefaultWarehouse(${w.id},"${esc(w.name)}")'>기본지정</button>`:""}
+          <button class="btn ghost sm" onclick='editWarehouse(${w.id})'>수정</button>`:""}
+        </div></td>
+      </tr>`).join("") : emptyRow(5);
+    renderPager("#whPager", data, whState, loadWarehouses);
+  }catch(err){ toast(err.message, true); }
+}
+
+function editWarehouse(id){ openWarehouseForm(_whs[id]); }
+
+// 기본창고 교체: 지정만 가능(해제 불가·정확히 1개 불변식은 서버가 최종 검증)
+async function setDefaultWarehouse(id, name){
+  if(!confirm(`"${name}" 창고를 기본창고로 지정할까요? 기존 기본창고는 일반 창고로 바뀝니다.`)) return;
+  try{
+    await api(`/api/warehouses/${id}`, {method:"PUT", body:{is_default:true}});
+    toast("기본창고를 교체했습니다.");
+    invalidateWarehouseCaches(); loadWarehouses();
+  }catch(err){ toast(err.message, true); }
+}
+
+function openWarehouseForm(w){
+  const fields = w ? [
+    {k:"code", label:"코드 *"},
+    {k:"name", label:"이름 *"},
+    {k:"is_default", label:"기본창고", type:"select",
+     opts: w.is_default ? [["true","기본창고 (해제는 다른 창고를 기본지정)"]]
+                        : [["false","일반"],["true","기본창고로 지정"]]},
+    {k:"is_active", label:"상태 (기본창고는 비활성 불가)", type:"select",
+     opts:[["true","활성"],["false","비활성"]]},
+  ] : [
+    {k:"code", label:"코드 (빈 값이면 자동 채번)"},
+    {k:"name", label:"이름 *"},
+    {k:"is_active", label:"상태", type:"select", opts:[["true","활성"],["false","비활성"]]},
+  ];
+  const data = w ? {code:w.code, name:w.name, is_default:String(w.is_default), is_active:String(w.is_active)} : null;
+  openForm(w ? "창고 수정" : "창고 등록", fields, data, async (payload)=>{
+    const body = {code:(payload.code||"").trim(), name:(payload.name||"").trim(), is_active:payload.is_active==="true"};
+    if(w){
+      if(!body.code) delete body.code;   // 수정 시 코드는 비울 수 없다
+      // 기본창고 지정은 변경됐을 때만 보낸다(기본 해제 요청은 서버가 400으로 막는다)
+      if(payload.is_default === "true" && !w.is_default) body.is_default = true;
+      await api(`/api/warehouses/${w.id}`, {method:"PUT", body});
+    }else{
+      await api("/api/warehouses", {method:"POST", body});
+    }
+    toast(w ? "수정했습니다." : "등록했습니다.");
+    invalidateWarehouseCaches(); loadWarehouses();
+  });
+}
+
+//==================== 창고간 이전 ====================
+async function openTransferForm(){
+  let items = [], whs = [];
+  try{
+    const [ir, wr] = await Promise.all([
+      api("/api/items?page=1&page_size=100"),
+      api("/api/warehouses?page=1&page_size=100"),
+    ]);
+    items = ir.items; whs = wr.items;
+  }catch(err){ toast(err.message, true); return; }
+  if(!items.length){ toast("먼저 품목을 등록하세요.", true); return; }
+  const active = whs.filter(w=>w.is_active);
+  if(whs.length < 2){ toast("창고간 이전에는 창고가 2개 이상 필요합니다. 창고 화면에서 먼저 등록하세요.", true); return; }
+  const def = whs.find(w=>w.is_default);
+  const whOpt = w => [String(w.id), `${esc(w.name)} (${esc(w.code)})${w.is_default?" · 기본":""}`];
+  const fields = [
+    {k:"item_id", label:"품목 *", type:"select",
+     opts:items.map(i=>[String(i.id), `${esc(i.name)} (${esc(i.code)})`])},
+    {k:"quantity", label:"수량 *", type:"number", default:1},
+    // 출고는 비활성 창고도 허용(폐쇄 창고의 잔여 재고 반출), 입고는 활성 창고만
+    {k:"from_warehouse_id", label:"출고창고 *", type:"select", opts:whs.map(whOpt),
+     default: def ? String(def.id) : ""},
+    {k:"to_warehouse_id", label:"입고창고 *", type:"select", opts:active.map(whOpt)},
+    {k:"note", label:"비고", full:true},
+  ];
+  openForm("창고간 이전", fields, null, async (payload)=>{
+    if(payload.from_warehouse_id === payload.to_warehouse_id)
+      throw new Error("출고창고와 입고창고가 같습니다. 서로 다른 창고를 선택하세요.");
+    const body = {
+      item_id: Number(payload.item_id),
+      from_warehouse_id: Number(payload.from_warehouse_id),
+      to_warehouse_id: Number(payload.to_warehouse_id),
+      quantity: Number(payload.quantity)||0,
+      note: payload.note,
+    };
+    const r = await api("/api/stock/transfer", {method:"POST", body});
+    toast("창고간 이전을 등록했습니다.");
+    loadStock();
+    setTimeout(()=>showTransferResult(r), 0);  // 등록 모달이 닫힌 뒤 결과 모달을 연다
+  });
+}
+
+// 이전 결과(출고/입고 이동번호, 이전원가)를 읽기 전용 모달로 보여준다
+function showTransferResult(r){
+  $("#mTitle").textContent = "창고간 이전 완료";
+  $("#mForm").innerHTML = `
+    <div class="full"><dl class="kv">
+      <dt>출고 이동번호</dt><dd class="code">${esc(r.out_movement_no)}</dd>
+      <dt>입고 이동번호</dt><dd class="code">${esc(r.in_movement_no)}</dd>
+      <dt>수량</dt><dd>${won(r.quantity)}</dd>
+      <dt>이전원가</dt><dd>₩${won(Math.round(r.cost))} <span class="muted">/ 단위 (출고창고 이동평균)</span></dd>
+    </dl></div>`;
+  _onSave = null;                       // 읽기 전용
+  $("#mSave").style.display = "none";   // 저장 버튼 숨김
+  $("#mCancel").textContent = "닫기";
+  $("#overlay").classList.add("open");
 }
 
 //==================== 매입/매출 내역 ====================
@@ -1834,7 +2042,7 @@ const auditState = {page:1, action:"", entity:"", from:"", to:"", q:""};
 let _audits = {};
 
 const ACTION_TAG = { CREATE:["both","등록"], UPDATE:["gray","수정"], DELETE:["supp","삭제"] };
-const ENTITY_LABEL = { user:"회원", partner:"거래처", item:"품목", stock:"재고" };
+const ENTITY_LABEL = { user:"회원", partner:"거래처", item:"품목", stock:"재고", warehouse:"창고", stock_transfer:"창고이전" };
 
 (function bindAuditFilters(){
   const a = $("#aAction"), e = $("#aEntity"), f = $("#aFrom"), t = $("#aTo"), q = $("#aQ");
@@ -2209,11 +2417,13 @@ const valState = {page:1, q:""};
 async function loadValuation(){
   const qs = new URLSearchParams({page:valState.page, page_size:10});
   if(valState.q) qs.set("q", valState.q);
+  const valWh = $("#valWh").value;                       // 미지정 시 전 창고 합산
+  if(valWh) qs.set("warehouse_id", valWh);
   try{
     const [data, summary, margin] = await Promise.all([
       api("/api/costing/valuation?"+qs),
-      api("/api/costing/valuation/summary"),
-      api("/api/costing/margin"),
+      api("/api/costing/valuation/summary" + (valWh ? "?warehouse_id="+valWh : "")),
+      api("/api/costing/margin"),                        // 손익은 창고 필터 미지원(전사 기준)
     ]);
     $("#valTotal").textContent = won(summary.total_value);
     $("#valCount").textContent = `보유 품목 ${won(summary.item_count)}개`;
@@ -2374,6 +2584,7 @@ $("#poStatus").addEventListener("change", ()=>{ poState.status=$("#poStatus").va
 $("#soSearch").addEventListener("input", debounce(()=>{ soState.q=$("#soSearch").value.trim(); soState.page=1; loadSalesOrders(); }, 300));
 $("#soStatus").addEventListener("change", ()=>{ soState.status=$("#soStatus").value; soState.page=1; loadSalesOrders(); });
 $("#valSearch").addEventListener("input", debounce(()=>{ valState.q=$("#valSearch").value.trim(); valState.page=1; loadValuation(); }, 300));
+$("#valWh").addEventListener("change", ()=>{ valState.page=1; loadValuation(); });
 $("#payKind").addEventListener("change", ()=>{ payState.kind=$("#payKind").value; payState.page=1; loadPayments(); });
 $("#balPartner").addEventListener("change", showBalance);
 $("#agKindAR").addEventListener("click", ()=>setAgingKind("AR"));
