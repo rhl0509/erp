@@ -1,0 +1,85 @@
+/* index.html #payments 이식 — page-head / 거래처 잔액 패널 / 결제 목록 패널 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 패널 사이 간격(transactions/stock 페이지와 동일 규칙) */
+.stack {
+  margin-bottom: var(--s4);
+}
+
+/* 거래처 잔액 stat 카드 묶음(레거시 #balResult .cards 패리티) */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s4);
+  margin-top: var(--s4);
+}
+
+/* 잔액 로딩/오류 안내 */
+.balNote {
+  color: var(--muted);
+  padding: var(--s3) 0 0;
+}
+
+/* 여신 가용액 음수(한도 초과) 강조 — 레거시 인라인 var(--danger,#c00) 패리티 */
+.negative {
+  color: var(--danger, #c00);
+}
+
+/* 구분 열의 문서 귀속 표시(레거시 span.muted 패리티) */
+.muted {
+  color: var(--muted);
+}
+
+/* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링 — transactions 와 동일 규칙) */
+.dateInput {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--field);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.dateInput:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+/* 기간 from ~ to 사이 물결(transactions 패리티) */
+.tilde {
+  color: var(--muted);
+}
+
+/* 모달 로딩/안내 문구(재고 페이지 modalNote 관례) */
+.modalNote {
+  color: var(--muted);
+  padding: var(--s4) 0;
+}
+
+/* 문서 결제 프리필의 연계 문서 안내(레거시 "문서 결제/수금 등록" 제목 보조) */
+.refNote {
+  color: var(--muted);
+  font-size: var(--t-cap);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: var(--s4);
+}

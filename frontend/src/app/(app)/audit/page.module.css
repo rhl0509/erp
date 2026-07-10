@@ -1,0 +1,84 @@
+/* index.html #audit 이식 — page-head / 필터 툴바 / 로그 표 / 상세 모달(JSON) */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링 — transactions 와 동일 규칙) */
+.dateInput {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--field);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.dateInput:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+/* 상세 모달 kv(레거시 dl.kv 패리티) */
+.kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--s3) var(--s4);
+  margin: 0 0 var(--s5);
+}
+
+.kv dt {
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: var(--t-sm);
+  letter-spacing: 0.04em;
+}
+
+.kv dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 변경 전/후 머리(레거시 .muted 굵게 패리티) */
+.jsonHead {
+  color: var(--muted);
+  font-weight: 600;
+  margin-top: var(--s4);
+}
+
+/* 변경 상세 JSON 뷰(레거시 pre.json 이식) */
+.json {
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin: var(--s2) 0 0;
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow: auto;
+}

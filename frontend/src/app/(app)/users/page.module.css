@@ -1,0 +1,90 @@
+/* index.html #users 이식 — page-head / 회원 목록 패널 / 상세 모달(권한 칩) */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 승인 대기(비활성) 행 강조 — 레거시 tr.below-safety 재사용 패리티 */
+.pendingRow td {
+  background: #f4f4f4;
+  font-weight: 600;
+}
+
+/* 역할 태그 나열 간격 */
+.roleTags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* 상세 모달 kv(레거시 dl.kv 패리티 — purchase 상세와 동일 규칙) */
+.kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--s3) var(--s4);
+  margin: 0 0 var(--s5);
+}
+
+.kv dt {
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: var(--t-sm);
+  letter-spacing: 0.04em;
+}
+
+.kv dd {
+  margin: 0;
+}
+
+/* 보유 권한 머리(레거시 .muted 굵게 패리티) */
+.permsHead {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* 권한 칩(레거시 .chips/.chip 이식) */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.chip {
+  background: #000;
+  color: #fff;
+  padding: 4px 11px;
+  border-radius: var(--radius);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 모달 로딩/안내 문구 */
+.modalNote {
+  color: var(--muted);
+  padding: var(--s4) 0;
+}

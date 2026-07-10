@@ -16,6 +16,8 @@ import styles from "./TopNav.module.css";
  * 레거시 패리티: data-perm 게이팅은 can(perm) 필터로. 재고 알림 배지
  * (#stockAlertCnt)는 /api/stock/alerts/count 쿼리로 — 재고 화면의
  * mutation 이 ["stock"] 을 invalidate 하면 함께 갱신된다.
+ * 승인 대기 회원 배지(#pendingUserCnt)는 /api/users/pending/count 쿼리로 —
+ * 회원 화면의 승인/등록/비활성이 ["users"] 를 invalidate 하면 함께 갱신된다.
  */
 export default function TopNav() {
   const pathname = usePathname();
@@ -31,6 +33,17 @@ export default function TopNav() {
     enabled: can("stock:read"),
   });
   const alertCount = alerts.data?.count ?? 0;
+
+  // 레거시 refreshPendingBadge 패리티 — 승인 대기 회원 수(회원 nav 배지)
+  const pendingUsers = useQuery({
+    queryKey: ["users", "pending", "count"],
+    queryFn: async () =>
+      unwrap(await client.GET("/api/users/pending/count")) as {
+        count: number;
+      },
+    enabled: can("user:read"),
+  });
+  const pendingUserCount = pendingUsers.data?.count ?? 0;
 
   return (
     <div className={styles.topbar}>
@@ -55,6 +68,9 @@ export default function TopNav() {
               {item.label}
               {item.key === "stock" && alertCount > 0 && (
                 <span className={styles.cnt}>{alertCount}</span>
+              )}
+              {item.key === "users" && pendingUserCount > 0 && (
+                <span className={styles.cnt}>{pendingUserCount}</span>
               )}
             </Link>
           ),

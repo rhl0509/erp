@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   keepPreviousData,
   useQuery,
@@ -456,9 +457,11 @@ function PoDetailModal({
   const { can } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const canWrite = can("purchase:write");
   const canInvoiceRead = can("invoice:read");
   const canInvoiceWrite = can("invoice:write");
+  const canPayWrite = can("payment:write");
 
   const detail = useQuery({
     queryKey: ["purchase", "detail", poId],
@@ -639,6 +642,18 @@ function PoDetailModal({
       />
 
       <div className={styles.actionBar}>
+        {/* 레거시 payFromDoc 패리티 — 결제 화면으로 거래처·구분·문서·금액 프리필 이동 */}
+        {canPayWrite && po.outstanding > 0 && (
+          <Button
+            onClick={() =>
+              router.push(
+                `/payments?ref_type=PO&ref_id=${po.id}&partner_id=${po.partner_id}&amount=${po.outstanding}`,
+              )
+            }
+          >
+            지급 등록
+          </Button>
+        )}
         {canWrite && canConfirm(po) && (
           <Button onClick={() => void onConfirm(po)}>확정</Button>
         )}

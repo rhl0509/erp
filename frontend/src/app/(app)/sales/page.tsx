@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   keepPreviousData,
   useQuery,
@@ -459,9 +460,11 @@ function SoDetailModal({
   const { can } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const canWrite = can("sales:write");
   const canInvoiceRead = can("invoice:read");
   const canInvoiceWrite = can("invoice:write");
+  const canPayWrite = can("payment:write");
 
   const detail = useQuery({
     queryKey: ["sales", "detail", soId],
@@ -642,6 +645,18 @@ function SoDetailModal({
       />
 
       <div className={styles.actionBar}>
+        {/* 레거시 payFromDoc 패리티 — 결제 화면으로 거래처·구분·문서·금액 프리필 이동 */}
+        {canPayWrite && so.outstanding > 0 && (
+          <Button
+            onClick={() =>
+              router.push(
+                `/payments?ref_type=SO&ref_id=${so.id}&partner_id=${so.partner_id}&amount=${so.outstanding}`,
+              )
+            }
+          >
+            수금 등록
+          </Button>
+        )}
         {canWrite && canConfirm(so) && (
           <Button onClick={() => void onConfirm(so)}>확정</Button>
         )}

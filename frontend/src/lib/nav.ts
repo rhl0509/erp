@@ -1,9 +1,8 @@
 /**
  * 앱 셸 nav 페이지 목록 — 레거시 index.html topbar nav(전 13개 페이지) 패리티.
- * perm 은 레거시 data-perm 매핑 그대로. 이전 완료된 페이지만 Next 경로를 쓰고,
- * 미이전 페이지는 /legacy#<page> 로 프록시(스트랭글러 공존 — 같은 origin 이라
- * localStorage 토큰 공유 = 재로그인 불필요). 슬라이스가 끝날 때마다 여기의
- * legacy: true 를 지우고 href 를 Next 경로로 바꾼다.
+ * perm 은 레거시 data-perm 매핑 그대로. 슬라이스 7(결제·회원·감사로그)로
+ * 전 콘텐츠 페이지 이전이 끝나 legacy: true 항목은 더 이상 없다.
+ * (legacy 필드는 /legacy 프록시가 완전히 내려갈 때까지 타입만 유지.)
  */
 export type NavItem = {
   /** 레거시 data-page 키 */
@@ -26,8 +25,8 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "sales", label: "수주", href: "/sales", perm: "sales:read" },
   { key: "transactions", label: "매입/매출", href: "/transactions", perm: "stock:read" },
   { key: "valuation", label: "재고평가", href: "/valuation", perm: "stock:read" },
-  { key: "payments", label: "결제", href: "/legacy#payments", perm: "payment:read", legacy: true },
+  { key: "payments", label: "결제", href: "/payments", perm: "payment:read" },
   { key: "aging", label: "채권/채무", href: "/aging", perm: "payment:read" },
-  { key: "users", label: "회원", href: "/legacy#users", perm: "user:read", legacy: true },
-  { key: "audit", label: "감사로그", href: "/legacy#audit", perm: "audit:read", legacy: true },
+  { key: "users", label: "회원", href: "/users", perm: "user:read" },
+  { key: "audit", label: "감사로그", href: "/audit", perm: "audit:read" },
 ];
