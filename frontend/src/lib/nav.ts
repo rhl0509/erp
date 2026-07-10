@@ -23,7 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "stock", label: "재고", href: "/stock", perm: "stock:read" },
   { key: "warehouses", label: "창고", href: "/warehouses", perm: "stock:read" },
   { key: "purchase", label: "발주", href: "/purchase", perm: "purchase:read" },
-  { key: "sales", label: "수주", href: "/legacy#sales", perm: "sales:read", legacy: true },
+  { key: "sales", label: "수주", href: "/sales", perm: "sales:read" },
   { key: "transactions", label: "매입/매출", href: "/legacy#transactions", perm: "stock:read", legacy: true },
   { key: "valuation", label: "재고평가", href: "/legacy#valuation", perm: "stock:read", legacy: true },
   { key: "payments", label: "결제", href: "/legacy#payments", perm: "payment:read", legacy: true },

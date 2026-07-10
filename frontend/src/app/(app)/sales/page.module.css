@@ -1,0 +1,57 @@
+/* index.html #sales .page-head + 수주 상세 모달 레이아웃 이식(발주 page.module.css 형제) */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 모달 로딩/안내 문구(재고 페이지 modalNote 관례) */
+.modalNote {
+  color: var(--muted);
+  padding: var(--s4) 0;
+}
+
+/* 상세 모달 헤더 — 레거시 viewOrder <dl> 이식 */
+.kv {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: var(--s3) var(--s4);
+  margin: 0 0 var(--s5);
+}
+
+.kv dt {
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: var(--t-sm);
+  letter-spacing: 0.04em;
+}
+
+.kv dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 상세 모달 하단 상태전이 액션 바(레거시 viewOrder 버튼 줄) */
+.actionBar {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-top: var(--s5);
+}
