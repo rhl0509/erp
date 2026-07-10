@@ -1,0 +1,51 @@
+/* index.html #aging 이식 — page-head / stat 1장 / 버킷 표 패널 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+/* 기준일 date 입력(Toolbar 는 text/select 만 스타일링 — transactions 와 동일 규칙) */
+.dateInput {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--field);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.dateInput:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+/* 합계 행(레거시 인라인 스타일 패리티 — 모노크롬 강조) */
+.totalRow td {
+  background: var(--surface-2);
+  font-weight: 800;
+  border-top: 2px solid var(--ink);
+}

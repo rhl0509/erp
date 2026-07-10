@@ -1,0 +1,68 @@
+/* index.html #transactions 이식 — page-head / cards / 패널 4단 스택 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+/* 패널 사이 간격(레거시 인라인 패리티 — stock 페이지와 동일 규칙) */
+.stack {
+  margin-bottom: var(--s4);
+}
+
+/* 기간별 합계 패널 머리의 월별/일별 셀렉트(레거시 #txnGroupBy 인라인 스타일 패리티) */
+.headSelect {
+  padding: 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: #fff;
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.headSelect:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+}
+
+/* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링하므로 여기서 맞춘다) */
+.dateInput {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--field);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.dateInput:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+/* 기간 from ~ to 사이 물결(레거시 span.muted) */
+.tilde {
+  color: var(--muted);
+}
