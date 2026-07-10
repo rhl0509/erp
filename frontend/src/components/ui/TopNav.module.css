@@ -112,6 +112,15 @@
   background: #1f1f1f;
   border-color: #5a5a5a;
 }
+/* 레거시 .who-btn.active — /me 페이지에 있을 때 */
+.whoBtn.active {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+}
+.whoBtn.active b {
+  color: #000;
+}
 
 /* topbar 위 ghost 버튼 오버라이드(레거시 .topbar .btn.ghost) */
 .topbar .logoutBtn {

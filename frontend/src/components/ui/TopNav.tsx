@@ -77,9 +77,17 @@ export default function TopNav() {
         )}
       </nav>
       <div className={styles.who}>
-        <a className={styles.whoBtn} href="/legacy#me" title="내 정보 보기">
+        <Link
+          className={
+            pathname.startsWith("/me")
+              ? `${styles.whoBtn} ${styles.active}`
+              : styles.whoBtn
+          }
+          href="/me"
+          title="내 정보 보기"
+        >
           <b>{me ? me.full_name || me.username : "-"}</b> 님
-        </a>
+        </Link>
         <Button
           variant="ghost"
           size="sm"
