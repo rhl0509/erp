@@ -1,0 +1,16 @@
+/* index.html .container(콘텐츠 폭) 이식 */
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--s8) var(--s6) var(--s9);
+}
+
+/* me 확인 중 빈 셸 — topbar 높이만큼 자리를 잡아 플리커를 줄인다 */
+.loading {
+  min-height: 100vh;
+}
+
+.loadingBar {
+  height: 60px;
+  background: var(--ink);
+}

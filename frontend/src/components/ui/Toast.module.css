@@ -1,0 +1,38 @@
+/* index.html .toasts / .toast 이식 */
+.toasts {
+  position: fixed;
+  right: var(--s5);
+  bottom: var(--s5);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.toast {
+  background: #000;
+  color: #fff;
+  border-left: 4px solid #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  min-width: 240px;
+  font-size: var(--t-cap);
+  animation: slidein 0.2s ease;
+}
+
+.error {
+  border-left-color: #fff;
+  background: #000;
+}
+
+@keyframes slidein {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}

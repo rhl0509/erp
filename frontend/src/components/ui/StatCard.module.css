@@ -1,0 +1,64 @@
+/* index.html .stat(.k/.v/.foot) 이식 */
+.stat {
+  position: relative;
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  padding: var(--s6);
+  overflow: hidden;
+  transition: border-color var(--tr), transform var(--tr);
+}
+.stat::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #000;
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--tr);
+}
+.stat:hover {
+  border-color: #000;
+}
+.stat:hover::before {
+  transform: scaleY(1);
+}
+
+.k {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v {
+  font-size: var(--t-3xl);
+  font-weight: 800;
+  margin-top: var(--s2);
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+/* index.html .stat .v small(단위 "건") 이식 */
+.v small {
+  font-size: var(--t-base);
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0;
+  margin-left: 2px;
+}
+
+.vSmallText {
+  font-size: var(--t-lg);
+}
+
+.foot {
+  margin-top: var(--s3);
+  font-size: var(--t-sm);
+  color: var(--muted-2);
+  font-weight: 500;
+}

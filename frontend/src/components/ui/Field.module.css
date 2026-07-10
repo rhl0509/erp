@@ -1,0 +1,39 @@
+/* index.html .field(로그인 카드) + .fld-err 이식 */
+.field {
+  margin-bottom: var(--s4);
+}
+
+.field label {
+  display: block;
+  margin-bottom: var(--s2);
+  font-weight: 700;
+  font-size: var(--t-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.field input {
+  width: 100%;
+  padding: 13px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  outline: none;
+  transition: border-color var(--tr), background var(--tr),
+    box-shadow var(--tr);
+}
+
+.field input:focus {
+  border-color: var(--ink);
+  background: #fff;
+  box-shadow: var(--ring);
+}
+
+.fldErr {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: var(--t-sm);
+  margin-top: 4px;
+  min-height: 14px;
+}

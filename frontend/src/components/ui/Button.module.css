@@ -1,0 +1,61 @@
+/* index.html .btn / .ghost / .danger / .sm / .block / [disabled] 이식 */
+.btn {
+  border: 1px solid var(--brand);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  font-weight: 700;
+  font-size: var(--t-base);
+  background: var(--brand);
+  color: #fff;
+  letter-spacing: -0.01em;
+  transition: background var(--tr), color var(--tr), border-color var(--tr),
+    transform var(--tr);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--brand-d);
+  border-color: var(--brand-d);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+
+.block {
+  width: 100%;
+  margin-top: var(--s1);
+}
+
+.ghost {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.ghost:hover {
+  background: var(--field);
+  border-color: #cfcfcf;
+}
+
+.danger {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line-d);
+}
+.danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.sm {
+  padding: 7px 12px;
+  font-size: var(--t-cap);
+  border-radius: var(--radius);
+}
+
+.btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

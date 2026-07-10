@@ -1,0 +1,32 @@
+/* index.html .panel / .panel-head / .toolbar 이식 */
+.panel {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--line);
+}
+
+.panelHead h3 {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.toolbar {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--line);
+}
