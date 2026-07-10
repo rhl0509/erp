@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from .database import SessionLocal, Base, engine
 from . import models  # noqa: F401
-from .models import User, Role, Permission, Partner, Item, StockMovement
+from .models import User, Role, Permission, Partner, Item, StockMovement, Warehouse
 from .security import hash_password
 from .services import generate_code, post_movement
 
@@ -138,7 +138,19 @@ def run():
             else:
                 admin_pw_msg = "로그인 계정: admin / (SEED_ADMIN_PASSWORD 로 지정한 값)"
 
-        # 5) 샘플 마스터 데이터
+        # 5) 기본창고 (멱등) — 재고 이동은 창고 차원이 필수라 마스터보다 먼저 보장.
+        #    창고 미지정 API 호출(하위호환)은 전부 이 창고(is_default=True)로 해석된다.
+        main_wh = db.execute(select(Warehouse).where(Warehouse.code == "MAIN")).scalar_one_or_none()
+        if not main_wh:
+            main_wh = Warehouse(code="MAIN", name="기본창고", is_default=True)
+            db.add(main_wh)
+            db.flush()
+        # 기본창고가 하나도 없으면(수동 조작 등) MAIN 을 기본으로 복구한다.
+        if not db.execute(select(Warehouse).where(Warehouse.is_default.is_(True))).scalars().first():
+            main_wh.is_default = True
+            db.flush()
+
+        # 6) 샘플 마스터 데이터
         if not db.execute(select(Partner)).scalars().first():
             db.add(Partner(
                 code=generate_code(db, "PARTNER", "CUST"),
@@ -153,7 +165,7 @@ def run():
             ))
         db.flush()
 
-        # 6) 샘플 입고 이력 (첫 품목 대상, 1회만) — 잔고도 함께 갱신
+        # 7) 샘플 입고 이력 (첫 품목 대상, 1회만) — 잔고도 함께 갱신(기본창고)
         if not db.execute(select(StockMovement)).scalars().first():
             item = db.execute(select(Item)).scalars().first()
             if item:

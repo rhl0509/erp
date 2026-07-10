@@ -11,23 +11,39 @@ from ..services import paginate
 router = APIRouter(prefix="/api/costing", tags=["costing"])
 
 
+def _balance_agg_sq(warehouse_id: int | None):
+    """품목 단위로 잔고를 합산하는 서브쿼리. 잔고가 창고별 행이라 SUM 으로 접는다.
+    (수량 합, 평가액 합 = Σ on_hand x 창고별 avg_cost — 창고별 평균을 존중한 정확한 평가)"""
+    sq = select(
+        StockBalance.item_id.label("item_id"),
+        func.sum(StockBalance.on_hand).label("on_hand"),
+        func.sum(StockBalance.on_hand * StockBalance.avg_cost).label("value"),
+    ).group_by(StockBalance.item_id)
+    if warehouse_id is not None:
+        sq = sq.where(StockBalance.warehouse_id == warehouse_id)
+    return sq.subquery()
+
+
 @router.get("/valuation", response_model=Page[StockValuationOut])
 def stock_valuation(
     q: str | None = Query(None, description="품목 이름 또는 코드 검색"),
     in_stock_only: bool = Query(True, description="현재고 > 0 품목만"),
+    warehouse_id: int | None = Query(None, description="특정 창고만 평가(미지정 시 전 창고 합산)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(require_permission("stock:read")),
 ):
-    """품목별 재고평가액(현재고 x 이동평균원가)."""
+    """품목별 재고평가액(현재고 x 이동평균원가). 창고 미지정 시 전 창고 합산이며,
+    표시 avg_cost 는 평가액/수량의 가중평균(창고 필터 시 그 창고의 이동평균과 동일)."""
+    bal_sq = _balance_agg_sq(warehouse_id)
     stmt = (
         select(Item)
-        .join(StockBalance, StockBalance.item_id == Item.id)
+        .join(bal_sq, bal_sq.c.item_id == Item.id)
         .order_by(Item.id.desc())
     )
     if in_stock_only:
-        stmt = stmt.where(StockBalance.on_hand > 0)
+        stmt = stmt.where(bal_sq.c.on_hand > 0)
     if q:
         stmt = stmt.where(or_(Item.name.like(f"%{q}%"), Item.code.like(f"%{q}%")))
 
@@ -36,33 +52,41 @@ def stock_valuation(
     bal: dict[int, tuple[int, float]] = {}
     if ids:
         rows = db.execute(
-            select(StockBalance.item_id, StockBalance.on_hand, StockBalance.avg_cost)
-            .where(StockBalance.item_id.in_(ids))
+            select(bal_sq.c.item_id, bal_sq.c.on_hand, bal_sq.c.value)
+            .where(bal_sq.c.item_id.in_(ids))
         ).all()
-        bal = {iid: (int(oh), float(ac)) for iid, oh, ac in rows}
+        bal = {iid: (int(oh), float(v)) for iid, oh, v in rows}
     result["items"] = [_valuation_out(it, *bal.get(it.id, (0, 0.0))) for it in result["items"]]
     return result
 
 
-def _valuation_out(it: Item, on_hand: int, avg_cost: float) -> StockValuationOut:
+def _valuation_out(it: Item, on_hand: int, value: float) -> StockValuationOut:
+    avg_cost = (value / on_hand) if on_hand else 0.0
     return StockValuationOut(
         item_id=it.id, item_code=it.code, item_name=it.name, unit=it.unit,
-        on_hand=on_hand, avg_cost=round(avg_cost, 2), value=round(on_hand * avg_cost),
+        on_hand=on_hand, avg_cost=round(avg_cost, 2), value=round(value),
     )
 
 
 @router.get("/valuation/summary", response_model=ValuationSummary)
 def valuation_summary(
+    warehouse_id: int | None = Query(None, description="특정 창고만 집계(미지정 시 전 창고)"),
     db: Session = Depends(get_db),
     _: User = Depends(require_permission("stock:read")),
 ):
-    """전체 재고평가액과 재고 보유 품목 수."""
-    total_value = db.execute(
-        select(func.coalesce(func.sum(StockBalance.on_hand * StockBalance.avg_cost), 0))
-    ).scalar_one()
-    item_count = db.execute(
-        select(func.count()).select_from(StockBalance).where(StockBalance.on_hand > 0)
-    ).scalar_one()
+    """전체 재고평가액과 재고 보유 품목 수(창고 필터 가능)."""
+    value_stmt = select(func.coalesce(func.sum(StockBalance.on_hand * StockBalance.avg_cost), 0))
+    # 창고별 행이라 '보유 품목 수'는 품목 단위 중복 제거(합산 후 >0 이 아닌, 보유 행 기준
+    # DISTINCT item — 음수재고가 없으므로 두 정의는 동일하다)
+    count_stmt = (
+        select(func.count(func.distinct(StockBalance.item_id)))
+        .where(StockBalance.on_hand > 0)
+    )
+    if warehouse_id is not None:
+        value_stmt = value_stmt.where(StockBalance.warehouse_id == warehouse_id)
+        count_stmt = count_stmt.where(StockBalance.warehouse_id == warehouse_id)
+    total_value = db.execute(value_stmt).scalar_one()
+    item_count = db.execute(count_stmt).scalar_one()
     return ValuationSummary(total_value=round(total_value or 0), item_count=int(item_count))
 
 

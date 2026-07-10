@@ -179,12 +179,38 @@ class ItemOut(ItemBase):
     created_at: datetime
 
 
+# ---------- 창고 ----------
+class WarehouseCreate(BaseModel):
+    code: str = Field(default="", max_length=30)   # 빈 값이면 서버가 채번(WH-0001)
+    name: str = Field(min_length=1, max_length=100)
+    is_active: bool = True
+
+
+class WarehouseUpdate(BaseModel):
+    """부분 수정용. 보낸 필드만 반영한다(누락 필드는 기존 값 유지)."""
+    code: str | None = Field(default=None, min_length=1, max_length=30)
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    is_default: bool | None = None
+    is_active: bool | None = None
+
+
+class WarehouseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
+    name: str
+    is_default: bool
+    is_active: bool
+    created_at: datetime
+
+
 # ---------- 재고 ----------
 class StockMovementCreate(BaseModel):
     item_id: int
-    movement_type: str = Field(pattern="^(IN|OUT|ADJUST)$")
+    movement_type: str = Field(pattern="^(IN|OUT|ADJUST)$")   # 창고간 이전은 /stock/transfer 전용
     quantity: int
     partner_id: int | None = None
+    warehouse_id: int | None = None            # 미지정 시 기본창고(하위호환)
     unit_price: int = Field(default=0, ge=0)   # 단가는 음수 불가(이동평균·매출 오염 방지)
     note: str = ""
 
@@ -209,10 +235,32 @@ class StockMovementOut(BaseModel):
     quantity: int
     partner_id: int | None = None
     partner_name: str = ""
+    warehouse_id: int | None = None   # 이동이 발생한 창고
+    warehouse_name: str = ""
     unit_price: int
     tax_amount: int = 0     # 부가세액(과세 품목의 IN/OUT). 공급가액 = quantity x unit_price
     note: str = ""
     created_at: datetime
+
+
+class StockTransferCreate(BaseModel):
+    """창고간 이전 요청. 출고창고의 이동평균 원가로 입고창고 평균을 갱신한다(원가 보존)."""
+    item_id: int
+    from_warehouse_id: int
+    to_warehouse_id: int
+    quantity: int = Field(ge=1)
+    note: str = ""
+
+
+class StockTransferOut(BaseModel):
+    """이전 결과. TRANSFER 페어 2행(출고 음수/입고 양수)의 요약."""
+    item_id: int
+    from_warehouse_id: int
+    to_warehouse_id: int
+    quantity: int
+    cost: float                 # 이전 단가 = 출고창고 이동평균 원가
+    out_movement_no: str
+    in_movement_no: str
 
 
 class StockLevelOut(BaseModel):

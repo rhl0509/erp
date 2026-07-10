@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .models import NumberSequence, AuditLog, StockMovement, StockBalance, Item
+from .models import NumberSequence, AuditLog, StockMovement, StockBalance, Item, Warehouse
 
 
 class StockError(Exception):
@@ -138,27 +138,37 @@ def generate_movement_no(db: Session, width: int = 4) -> str:
     return "-".join(["STK", period, str(seq).zfill(width)])
 
 
-def apply_stock_delta(
-    db: Session, item_id: int, delta: int, *, unit_cost: int | Decimal | None = None,
-    allow_negative: bool = False,
-) -> tuple[int, Decimal]:
-    """재고 잔고를 원자적으로 증감한다. 잔고 행을 SELECT ... FOR UPDATE 로 잠가
-    동시 입출고 경합(TOCTOU)을 막고, 결과가 음수면 StockError 를 던진다.
+def get_default_warehouse_id(db: Session) -> int:
+    """기본창고(is_default=True) id. 창고 미지정 호출(하위호환)을 이 창고로 해석한다.
+    시드/마이그레이션이 MAIN 창고를 보장하지만, 없으면 조용히 오동작하지 않게 오류로 막는다."""
+    wid = db.execute(
+        select(Warehouse.id).where(Warehouse.is_default.is_(True)).limit(1)
+    ).scalar_one_or_none()
+    if wid is None:
+        raise StockError("기본창고가 없습니다. 시드(app.seed) 또는 마이그레이션을 먼저 실행하세요")
+    return wid
 
-    재고가 늘고(delta>0) 매입단가(unit_cost)가 주어지면 이동평균 원가를 갱신한다.
-    (현재고, 이동평균원가) 튜플을 돌려준다. 원가는 Decimal 로 계산·저장한다."""
+
+def _lock_balance_row(db: Session, item_id: int, warehouse_id: int) -> StockBalance:
+    """(품목, 창고) 잔고 행을 SELECT ... FOR UPDATE 로 잠가 반환한다(없으면 생성).
+
+    동시 최초 생성(같은 품목·창고 첫 입출고) 경합은 복합 PK 충돌을 세이브포인트로
+    흡수하고 상대가 만든 잔고 행을 잠가 다시 읽는다."""
     def _select_locked():
         return db.execute(
-            select(StockBalance).where(StockBalance.item_id == item_id).with_for_update()
+            select(StockBalance)
+            .where(StockBalance.item_id == item_id, StockBalance.warehouse_id == warehouse_id)
+            .with_for_update()
         ).scalar_one_or_none()
 
     row = _select_locked()
     if row is None:
-        # 동시 최초 생성(같은 품목 첫 입출고) 경합은 PK 충돌을 세이브포인트로 흡수하고
-        # 상대가 만든 잔고 행을 잠가 다시 읽는다.
         savepoint = db.begin_nested()
         try:
-            row = StockBalance(item_id=item_id, on_hand=0, avg_cost=Decimal("0"))
+            row = StockBalance(
+                item_id=item_id, warehouse_id=warehouse_id,
+                on_hand=0, avg_cost=Decimal("0"),
+            )
             db.add(row)
             db.flush()
             savepoint.commit()
@@ -167,6 +177,20 @@ def apply_stock_delta(
             row = _select_locked()
             if row is None:
                 raise
+    return row
+
+
+def apply_stock_delta(
+    db: Session, item_id: int, delta: int, *, warehouse_id: int,
+    unit_cost: int | Decimal | None = None, allow_negative: bool = False,
+) -> tuple[int, Decimal]:
+    """창고별 재고 잔고를 원자적으로 증감한다. (품목, 창고) 잔고 행을
+    SELECT ... FOR UPDATE 로 잠가 동시 입출고 경합(TOCTOU)을 막고,
+    결과가 음수면 StockError 를 던진다. 음수재고·이동평균은 모두 창고 단위다.
+
+    재고가 늘고(delta>0) 매입단가(unit_cost)가 주어지면 이동평균 원가를 갱신한다.
+    (현재고, 이동평균원가) 튜플을 돌려준다. 원가는 Decimal 로 계산·저장한다."""
+    row = _lock_balance_row(db, item_id, warehouse_id)
 
     new_on_hand = row.on_hand + delta
     if new_on_hand < 0 and not allow_negative:
@@ -192,7 +216,8 @@ def apply_stock_delta(
 
 
 def _signed_delta(movement_type: str, quantity: int) -> int:
-    """이동 유형에 따른 잔고 증감량. OUT은 차감, IN은 가산, ADJUST는 부호 있는 그대로."""
+    """이동 유형에 따른 잔고 증감량. OUT은 차감, IN은 가산,
+    ADJUST/TRANSFER는 부호 있는 그대로(TRANSFER 는 출고행 음수/입고행 양수 페어)."""
     return -quantity if movement_type == "OUT" else quantity
 
 
@@ -207,15 +232,20 @@ def post_movement(
     note: str = "",
     ref_type: str = "MANUAL",
     ref_line_id: int | None = None,
+    warehouse_id: int | None = None,
 ) -> StockMovement:
     """입출고 1건을 잔고·원가 갱신과 함께 기록한다(단일 진입점).
     잔고 증감 → 채번 → 이동 insert 순. 재고 부족 시 StockError.
 
-    원가: IN은 매입단가로 이동평균을 갱신하고 이동원가=매입단가,
-    OUT/ADJUST는 평균 불변이며 이동원가=현재 이동평균원가(COGS 계산용)."""
+    창고: warehouse_id 미지정(None)이면 기본창고로 해석한다(기존 호출 하위호환).
+    원가: IN은 매입단가로 창고별 이동평균을 갱신하고 이동원가=매입단가,
+    OUT/ADJUST는 평균 불변이며 이동원가=해당 창고의 현재 이동평균원가(COGS 계산용)."""
+    if warehouse_id is None:
+        warehouse_id = get_default_warehouse_id(db)
     unit_cost = unit_price if movement_type == "IN" else None
     _, avg_cost = apply_stock_delta(
-        db, item_id, _signed_delta(movement_type, quantity), unit_cost=unit_cost
+        db, item_id, _signed_delta(movement_type, quantity),
+        warehouse_id=warehouse_id, unit_cost=unit_cost,
     )
     # IN=매입단가를 이동원가로, OUT/ADJUST=출고 시점 이동평균원가를 이동원가로(COGS용).
     movement_cost = Decimal(unit_price) if movement_type == "IN" else avg_cost
@@ -232,6 +262,7 @@ def post_movement(
     movement = StockMovement(
         movement_no=movement_no,
         item_id=item_id,
+        warehouse_id=warehouse_id,
         movement_type=movement_type,
         quantity=quantity,
         unit_price=unit_price,
@@ -258,21 +289,27 @@ def post_return(
     ref_type: str,        # "PRET" / "SRET"
     ref_line_id: int | None = None,
     note: str = "",
+    warehouse_id: int | None = None,
 ) -> StockMovement:
     """반품을 '음수 수량의 역이동'으로 기록한다. 저장 수량이 음수라, 부호 있는 합계로
     집계하는 AP/AR·매출·통계·리포트가 쿼리 변경 없이 자동으로 차감된다.
 
     - purchase(매입반품): IN 유형 · 재고 감소(공급처로 반출) · AP 차감. 재고 부족 시 StockError.
     - sales(매출반품): OUT 유형 · 재고 증가(고객이 반품) · AR 차감.
+    창고: warehouse_id 미지정(None)이면 기본창고(하위호환).
     이동평균 원가는 재계산하지 않는다(반품은 새 매입 원가층을 만들지 않는다)."""
     if quantity <= 0:
         raise StockError("반품 수량은 양수여야 합니다")
+    if warehouse_id is None:
+        warehouse_id = get_default_warehouse_id(db)
     if kind == "purchase":
         movement_type, on_hand_delta = "IN", -quantity   # 재고 감소
     else:  # sales
         movement_type, on_hand_delta = "OUT", quantity    # 재고 증가
     # unit_cost=None → 이동평균 불변(수량만 증감). 매입반품이 재고보다 크면 음수재고로 막힌다.
-    _, avg_cost = apply_stock_delta(db, item_id, on_hand_delta, unit_cost=None)
+    _, avg_cost = apply_stock_delta(
+        db, item_id, on_hand_delta, warehouse_id=warehouse_id, unit_cost=None
+    )
 
     stored_qty = -quantity   # 원거래의 역(음수)
     item = db.get(Item, item_id)
@@ -284,13 +321,75 @@ def post_return(
     # 채번은 재고 검증(apply_stock_delta) 이후 — 실패 시 결번을 만들지 않는다.
     movement = StockMovement(
         movement_no=generate_movement_no(db),
-        item_id=item_id, movement_type=movement_type, quantity=stored_qty,
+        item_id=item_id, warehouse_id=warehouse_id,
+        movement_type=movement_type, quantity=stored_qty,
         unit_price=unit_price, cost=cost, tax_amount=tax_amount,
         partner_id=partner_id, note=note, ref_type=ref_type, ref_line_id=ref_line_id,
     )
     db.add(movement)
     db.flush()
     return movement
+
+
+def post_transfer(
+    db: Session,
+    *,
+    item_id: int,
+    from_warehouse_id: int,
+    to_warehouse_id: int,
+    quantity: int,
+    note: str = "",
+) -> tuple[StockMovement, StockMovement]:
+    """창고간 이전. TRANSFER 페어 2행(출고창고 음수 / 입고창고 양수)으로 기록한다.
+
+    원가 보존: 출고창고의 이동평균 원가를 이전 단가로 삼아 입고창고의 이동평균을
+    갱신한다(출고창고는 수량만 감소, 평균 불변). 회사 전체 재고평가액이 이전으로
+    변하지 않는다. TRANSFER 는 partner_id=None·unit_price=0·tax_amount=0 이라
+    매입/매출·AP/AR 통계(IN/OUT 만 집계)에 잡히지 않는다 — 이 불변식을 깨지 말 것.
+
+    교착 방지: 두 잔고 행을 항상 warehouse_id 오름차순으로 잠근다. 교차 이전
+    (A→B 와 B→A 동시)이라도 락 획득 순서가 같아 데드락이 나지 않는다.
+    (출고, 입고) StockMovement 튜플을 돌려준다. 재고 부족 시 StockError."""
+    if quantity <= 0:
+        raise StockError("이전 수량은 양수여야 합니다")
+    if from_warehouse_id == to_warehouse_id:
+        raise StockError("출고창고와 입고창고가 같습니다")
+
+    # 결정적 락 순서(오름차순)로 두 잔고를 먼저 확보한 뒤에 증감을 적용한다.
+    rows = {
+        wid: _lock_balance_row(db, item_id, wid)
+        for wid in sorted((from_warehouse_id, to_warehouse_id))
+    }
+    # 이전 단가 = 출고창고의 현재 이동평균 원가(락 획득 후 읽어야 정확하다)
+    transfer_cost = rows[from_warehouse_id].avg_cost
+
+    # 출고창고: 수량만 차감(평균 불변). 재고 부족이면 StockError 로 전체 롤백된다.
+    apply_stock_delta(
+        db, item_id, -quantity, warehouse_id=from_warehouse_id, unit_cost=None
+    )
+    # 입고창고: 출고창고 평균을 매입단가처럼 넣어 이동평균 갱신(원가 보존).
+    apply_stock_delta(
+        db, item_id, quantity, warehouse_id=to_warehouse_id, unit_cost=transfer_cost
+    )
+
+    # 채번은 재고 검증 이후(실패 시 결번 방지). ref_type=TRANSFER 로 표시해
+    # 수기(MANUAL) 삭제 API 가 페어 한쪽만 지우는 것을 막는다.
+    common = dict(
+        item_id=item_id, movement_type="TRANSFER", partner_id=None,
+        unit_price=0, tax_amount=Decimal("0"), cost=transfer_cost,
+        note=note, ref_type="TRANSFER", ref_line_id=None,
+    )
+    out_mv = StockMovement(
+        movement_no=generate_movement_no(db),
+        warehouse_id=from_warehouse_id, quantity=-quantity, **common,
+    )
+    in_mv = StockMovement(
+        movement_no=generate_movement_no(db),
+        warehouse_id=to_warehouse_id, quantity=quantity, **common,
+    )
+    db.add_all([out_mv, in_mv])
+    db.flush()
+    return out_mv, in_mv
 
 
 def record_audit(

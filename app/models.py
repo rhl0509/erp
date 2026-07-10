@@ -143,6 +143,19 @@ class Item(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+# ---------- 마스터: 창고 ----------
+class Warehouse(Base, TimestampMixin):
+    """재고를 보관하는 물리/논리 창고. 모든 재고 이동·잔고는 창고 차원을 갖는다.
+    is_default=True 창고는 API가 창고를 지정하지 않은 기존(하위호환) 호출의 대상이 된다."""
+    __tablename__ = "warehouses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(30), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 # ---------- 재고: 입출고 이력 ----------
 class StockMovement(Base, TimestampMixin):
     __tablename__ = "stock_movements"
@@ -155,8 +168,10 @@ class StockMovement(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     movement_no: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id"), index=True)
-    movement_type: Mapped[str] = mapped_column(String(10))  # IN / OUT / ADJUST
-    quantity: Mapped[int] = mapped_column(Integer)          # IN/OUT은 양수, ADJUST는 부호 있는 증감량
+    # 이동이 발생한 창고. TRANSFER(창고간 이전)는 창고당 1행씩 페어(출고 음수/입고 양수)로 기록한다.
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id"), index=True)
+    movement_type: Mapped[str] = mapped_column(String(10))  # IN / OUT / ADJUST / TRANSFER
+    quantity: Mapped[int] = mapped_column(Integer)          # IN/OUT은 양수, ADJUST/TRANSFER는 부호 있는 증감량
     partner_id: Mapped[int | None] = mapped_column(ForeignKey("partners.id"), nullable=True)
     unit_price: Mapped[int] = mapped_column(Integer, default=0)
     # 원가: IN=매입단가, OUT/ADJUST=출고 시점 이동평균 원가(COGS 계산용).
@@ -172,16 +187,22 @@ class StockMovement(Base, TimestampMixin):
 
     item: Mapped["Item"] = relationship(lazy="selectin")
     partner: Mapped["Partner | None"] = relationship(lazy="selectin")
+    warehouse: Mapped["Warehouse"] = relationship(lazy="selectin")
 
 
-# ---------- 재고: 품목별 현재고 캐시(잔고) ----------
+# ---------- 재고: 품목·창고별 현재고 캐시(잔고) ----------
 class StockBalance(Base):
     """모든 입출고가 이 잔고를 증분 갱신한다. 현재고를 매번 이동 합산하지 않고
-    O(1) 조회하기 위한 캐시(원천은 stock_movements)."""
+    O(1) 조회하기 위한 캐시(원천은 stock_movements).
+    창고별 이동평균 원가를 위해 PK는 (item_id, warehouse_id) 복합키다 —
+    같은 품목이라도 창고마다 on_hand·avg_cost 를 독립적으로 가진다."""
     __tablename__ = "stock_balances"
 
     item_id: Mapped[int] = mapped_column(
         ForeignKey("items.id", ondelete="CASCADE"), primary_key=True
+    )
+    warehouse_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouses.id"), primary_key=True
     )
     on_hand: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # 이동평균 원가(가중평균 매입단가). 재고평가액 = on_hand * avg_cost

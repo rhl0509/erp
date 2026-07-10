@@ -16,7 +16,7 @@ from .observability import (
 from . import models  # noqa: F401  (모델 등록을 위해 import 필요)
 from .api import (
     auth, users, partners, items, stock, stats, reports, audit,
-    purchase, sales, costing, payments, invoices,
+    purchase, sales, costing, payments, invoices, warehouses,
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -120,6 +120,7 @@ app.include_router(users.router)
 app.include_router(partners.router)
 app.include_router(items.router)
 app.include_router(stock.router)
+app.include_router(warehouses.router)
 app.include_router(purchase.router)
 app.include_router(sales.router)
 app.include_router(costing.router)
