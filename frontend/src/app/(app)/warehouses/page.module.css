@@ -1,0 +1,27 @@
+/* index.html #warehouses .page-head 이식 — partners/items 페이지와 동일 골격 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 기본창고 아님 표시(레거시 <span class="muted">-</span>) */
+.muted {
+  color: var(--muted);
+}

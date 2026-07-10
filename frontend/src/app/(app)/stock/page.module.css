@@ -1,0 +1,70 @@
+/* index.html #stock 이식 — 알림/현재고/입출고 3개 패널 스택 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 패널 사이 간격(레거시 .panel margin-bottom:var(--s4) 인라인 패리티) */
+.stack {
+  margin-bottom: var(--s4);
+}
+
+/* 알림 패널 머리 설명(레거시 .panel-head .muted) */
+.panelCaption {
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 안전재고 미달 행(레거시 tr.below-safety td) */
+.belowSafety td {
+  background: #f4f4f4;
+  font-weight: 600;
+}
+
+/* 모달 로딩/안내 문구 */
+.modalNote {
+  color: var(--muted);
+  padding: var(--s4) 0;
+}
+
+/* 이전 결과 — 레거시 dl.kv 이식 */
+.kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--s3) var(--s4);
+  margin: 0;
+}
+.kv dt {
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: var(--t-sm);
+  letter-spacing: 0.04em;
+}
+.kv dd {
+  margin: 0;
+}
+.kv dd.code {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kv .muted {
+  color: var(--muted);
+}

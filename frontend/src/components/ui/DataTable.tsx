@@ -38,6 +38,8 @@ type DataTableProps<T> = {
   /** 행 우측 액션 슬롯(레거시 .row-actions) — 지정 시 빈 헤더 열이 추가된다 */
   actions?: (row: T) => ReactNode;
   onRowClick?: (row: T) => void;
+  /** 행 강조 클래스(레거시 tr.below-safety) — 페이지 CSS 모듈 클래스를 반환 */
+  rowClassName?: (row: T) => string | undefined;
   /** 현재 서버사이드 정렬 상태(page 컴포넌트가 소유) */
   sort?: SortState;
   /** 헤더 클릭 시 다음 정렬 상태 통지 — 같은 키면 asc↔desc 토글 */
@@ -57,6 +59,7 @@ export default function DataTable<T>({
   emptyText = "데이터가 없습니다.",
   actions,
   onRowClick,
+  rowClassName,
   sort,
   onSortChange,
 }: DataTableProps<T>) {
@@ -136,10 +139,17 @@ export default function DataTable<T>({
             </td>
           </tr>
         ) : (
-          rows.map((row) => (
+          rows.map((row) => {
+            const trCls = [
+              onRowClick ? styles.clickable : "",
+              rowClassName?.(row) ?? "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
             <tr
               key={rowKey(row)}
-              className={onRowClick ? styles.clickable : undefined}
+              className={trCls || undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((col) => {
@@ -161,7 +171,8 @@ export default function DataTable<T>({
                 </td>
               )}
             </tr>
-          ))
+            );
+          })
         )}
       </tbody>
     </table>

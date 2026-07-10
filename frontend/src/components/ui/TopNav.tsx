@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 import Button from "@/components/ui/Button";
+import { client, unwrap } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { NAV_ITEMS } from "@/lib/nav";
 
@@ -11,14 +13,24 @@ import styles from "./TopNav.module.css";
 
 /**
  * 앱 셸 topbar — 브랜드 + 권한 기반 nav + 사용자명/로그아웃.
- * 레거시 패리티: data-perm 게이팅은 can(perm) 필터로, nav 배지 2종
- * (재고 알림/승인 대기)은 슬라이스 2에서 폴링 쿼리로 붙인다.
+ * 레거시 패리티: data-perm 게이팅은 can(perm) 필터로. 재고 알림 배지
+ * (#stockAlertCnt)는 /api/stock/alerts/count 쿼리로 — 재고 화면의
+ * mutation 이 ["stock"] 을 invalidate 하면 함께 갱신된다.
  */
 export default function TopNav() {
   const pathname = usePathname();
   const { me, can, logout } = useAuth();
 
   const visibleItems = NAV_ITEMS.filter((item) => !item.perm || can(item.perm));
+
+  // 레거시 refreshStockAlertBadge 패리티 — 실패해도 조용히 무시(배지만 숨김)
+  const alerts = useQuery({
+    queryKey: ["stock", "alerts", "count"],
+    queryFn: async () =>
+      unwrap(await client.GET("/api/stock/alerts/count")) as { count: number },
+    enabled: can("stock:read"),
+  });
+  const alertCount = alerts.data?.count ?? 0;
 
   return (
     <div className={styles.topbar}>
@@ -41,6 +53,9 @@ export default function TopNav() {
               href={item.href}
             >
               {item.label}
+              {item.key === "stock" && alertCount > 0 && (
+                <span className={styles.cnt}>{alertCount}</span>
+              )}
             </Link>
           ),
         )}
