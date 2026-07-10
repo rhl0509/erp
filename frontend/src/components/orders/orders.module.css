@@ -1,0 +1,68 @@
+/* 주문문서(발주/수주) 공용 컴포넌트 스타일 — 레거시 .ln-tbl 행 편집/수량 입력 이식.
+   표 골격은 DataTable 을 재사용하고, 셀 안의 입력만 여기서 스타일링한다. */
+
+/* 레거시 openOrderForm 의 <label>명세</label> 패리티 (Field.module.css label 톤) */
+.lnLabel {
+  display: block;
+  margin-bottom: var(--s2);
+  font-weight: 700;
+  font-size: var(--t-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* 셀 안 입력 공통 — Field input 톤의 컴팩트 버전 */
+.lnItem,
+.lnQty,
+.lnPrice {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--field);
+  outline: none;
+  transition:
+    border-color var(--tr),
+    background-color var(--tr),
+    box-shadow var(--tr);
+}
+
+.lnItem:focus,
+.lnQty:focus,
+.lnPrice:focus {
+  border-color: var(--ink);
+  background-color: #fff;
+  box-shadow: var(--ring);
+}
+
+/* 레거시 인라인 width 패리티 — 품목 select 는 셀 폭, 수량 76px, 단가 96px */
+.lnItem {
+  width: 100%;
+  min-width: 160px;
+}
+
+.lnQty {
+  width: 76px;
+}
+
+.lnPrice {
+  width: 96px;
+}
+
+/* 명세 편집기 하단 — [+ 행 추가] 와 합계 표시 */
+.lnFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.lnTotal {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.lnTotal b {
+  color: var(--ink);
+}
