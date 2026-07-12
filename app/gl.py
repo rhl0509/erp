@@ -318,6 +318,41 @@ def post_for_payment(db: Session, payment: Payment) -> JournalEntry | None:
     )
 
 
+# ---------- S6: 수기 전표 (MANUAL) ----------
+def post_manual_entry(
+    db: Session,
+    *,
+    entry_date: str,
+    description: str,
+    lines: list[dict],
+) -> JournalEntry:
+    """수기 전표(기초잔액·마감·수정 분개용, §2·§9-6 — 3110 상대가 전형).
+
+    source_id=None 이라 멱등 대상이 아니고(항상 신규 생성), rebuild 가 보존한다
+    (자동 전기와 달리 원천이 없어 재생성이 불가능하므로). 차대 균형·0원 라인
+    금지·계정 존재는 post_journal 이 강제하며, 위반 시 GLError → 롤백.
+
+    lines: [{account_code, debit?, credit?, partner_id?, memo?}, ...]
+    """
+    specs = [
+        _line(
+            l["account_code"],
+            debit=l.get("debit") or 0,
+            credit=l.get("credit") or 0,
+            partner_id=l.get("partner_id"),
+            memo=l.get("memo") or "",
+        )
+        for l in lines
+    ]
+    entry = post_journal(
+        db, source_type="MANUAL", source_id=None,
+        entry_date=entry_date, description=description, lines=specs,
+    )
+    if entry is None:
+        raise GLError("유효한 분개 라인이 없습니다(모든 라인이 0원).")
+    return entry
+
+
 # ---------- S3: 백필/재전기 (rebuild) ----------
 def rebuild_gl(db: Session) -> dict:
     """GL 전체 재전기: 전 전표 삭제 후 원천을 시간순 replay(§6).
@@ -327,10 +362,15 @@ def rebuild_gl(db: Session) -> dict:
     매입반품의 '반품 시점 이동평균'은 원천에 저장돼 있지 않은 유일한 값이라,
     (item_id, warehouse_id)별 이동평균 시뮬레이터를 apply_stock_delta 와 동일
     수식으로 유지해 복원한다. replay 종료 시 시뮬레이터가 현재 stock_balances 와
-    일치해야 하며, 불일치면 GLError 로 중단한다(과거 이력 단절 신호)."""
-    # 1) 기존 전표 전체 삭제 (초기 백필이면 0건)
-    db.execute(delete(JournalLine))
-    db.execute(delete(JournalEntry))
+    일치해야 하며, 불일치면 GLError 로 중단한다(과거 이력 단절 신호).
+
+    S6 MANUAL 전표(기초잔액·수기 분개)는 원천이 없어 재생성 불가하므로 보존한다
+    (자동 전기분 MOVEMENT/PAYMENT 만 삭제·replay). 삭제하면 재전기가 곧 데이터
+    손실이 된다."""
+    # 1) 자동 전기분 전표만 삭제(MANUAL 보존). 초기 백필이면 0건.
+    auto_entry_ids = select(JournalEntry.id).where(JournalEntry.source_type != "MANUAL")
+    db.execute(delete(JournalLine).where(JournalLine.entry_id.in_(auto_entry_ids)))
+    db.execute(delete(JournalEntry).where(JournalEntry.source_type != "MANUAL"))
     db.flush()
     ensure_accounts(db)
 
@@ -404,14 +444,23 @@ def _dec(v) -> Decimal:
     return v if isinstance(v, Decimal) else Decimal(str(v or 0))
 
 
-def _gl_net_debit(db: Session, code: str) -> Decimal:
-    """계정의 GL 순차변 잔액(Σdebit − Σcredit)."""
-    val = db.execute(
+def _gl_net_debit(db: Session, code: str, *, auto_only: bool = False) -> Decimal:
+    """계정의 GL 순차변 잔액(Σdebit − Σcredit).
+
+    auto_only=True 면 자동 전기분(MOVEMENT/PAYMENT)만 합산한다. 재고·AR·AP
+    재대사는 보조원장(valuation·aging)이 자동 전기분만 반영하므로, MANUAL
+    수기 전표(기초잔액 등)를 제외해야 '자동 전기 == 보조원장' 불변식이 유지된다
+    (그래야 MANUAL 이 있어도 rebuild 후 재대사가 통과한다)."""
+    stmt = (
         select(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
         .join(Account, JournalLine.account_id == Account.id)
         .where(Account.code == code)
-    ).scalar_one()
-    return _dec(val)
+    )
+    if auto_only:
+        stmt = stmt.join(JournalEntry, JournalLine.entry_id == JournalEntry.id).where(
+            JournalEntry.source_type != "MANUAL"
+        )
+    return _dec(db.execute(stmt).scalar_one())
 
 
 def reconcile(db: Session) -> dict:
@@ -435,7 +484,7 @@ def reconcile(db: Session) -> dict:
     inv_expected = _dec(db.execute(
         select(func.coalesce(func.sum(StockBalance.on_hand * StockBalance.avg_cost), 0))
     ).scalar_one())
-    inventory = item(_gl_net_debit(db, ACC_INVENTORY), inv_expected)
+    inventory = item(_gl_net_debit(db, ACC_INVENTORY, auto_only=True), inv_expected)
 
     # AR/AP vs 원천(납품 기준 청구 − 결제). partner 없는 이동은 GL 도 1110 으로
     # 보냈으므로 여기서도 제외 — 정의가 정확히 맞물린다.
@@ -456,9 +505,9 @@ def reconcile(db: Session) -> dict:
         ).scalar_one()
         return _dec(val)
 
-    ar = item(_gl_net_debit(db, ACC_AR), _charges("OUT") - _paid("AR"))
+    ar = item(_gl_net_debit(db, ACC_AR, auto_only=True), _charges("OUT") - _paid("AR"))
     # AP 는 대변 정상잔액 → 순대변(credit − debit)으로 비교
-    ap = item(-_gl_net_debit(db, ACC_AP), _charges("IN") - _paid("AP"))
+    ap = item(-_gl_net_debit(db, ACC_AP, auto_only=True), _charges("IN") - _paid("AP"))
 
     # 시산표 균형
     td, tc = db.execute(

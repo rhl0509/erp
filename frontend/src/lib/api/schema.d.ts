@@ -837,6 +837,32 @@ export interface paths {
         get: operations["get_journal_entry_api_gl_journal__entry_id__get"];
         put?: never;
         post?: never;
+        /**
+         * Delete Manual Entry
+         * @description 수기 전표만 직접 삭제 가능. 자동 전기(MOVEMENT/PAYMENT) 전표는 원천 문서를
+         *     삭제해야 동반 삭제되므로(§9-4) 여기서 지우면 대사가 깨진다 — 400 으로 막는다.
+         */
+        delete: operations["delete_manual_entry_api_gl_journal__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Manual Entry
+         * @description 수기 전표 등록(기초잔액·마감·수정 분개). 차대 균형은 스키마·서비스가
+         *     이중 검증한다. source_type=MANUAL, source_id=NULL 이라 rebuild 가 보존한다.
+         */
+        post: operations["create_manual_entry_api_gl_manual_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -877,6 +903,49 @@ export interface paths {
          *     활성 계정은 거래가 없어도 0 으로 표시한다(누락과 무거래를 구분).
          */
         get: operations["trial_balance_api_gl_trial_balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/income-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Income Statement
+         * @description 간이 손익계산서: 수익 − 비용 = 당기순이익(§7). 수익은 대변 정상잔액,
+         *     비용은 차변 정상잔액이라 각각 부호를 뒤집어 양수로 표시한다.
+         */
+        get: operations["income_statement_api_gl_income_statement_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/balance-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Balance Sheet
+         * @description 간이 재무상태표: 자산 = 부채 + 자본 + 당기순이익(§7). 마감 분개를 두지
+         *     않으므로 당기순이익(손익계정 누계)을 자본 아래 별도 표시한다. 시산표가
+         *     균형이면 항상 대차가 맞는다(각 전표가 자기완결적이므로).
+         */
+        get: operations["balance_sheet_api_gl_balance_sheet_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1214,6 +1283,42 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * BalanceSheetOut
+         * @description 간이 재무상태표(§7): 자산 = 부채 + 자본 + 당기순이익(미마감). date_to 시점 누계.
+         *     마감 분개를 두지 않으므로 당기순이익은 손익계정에 남아 자본 아래 별도 표시한다.
+         */
+        BalanceSheetOut: {
+            /** Date To */
+            date_to?: string | null;
+            /**
+             * Assets
+             * @default []
+             */
+            assets: components["schemas"]["FinancialRow"][];
+            /**
+             * Liabilities
+             * @default []
+             */
+            liabilities: components["schemas"]["FinancialRow"][];
+            /**
+             * Equity
+             * @default []
+             */
+            equity: components["schemas"]["FinancialRow"][];
+            /** Total Assets */
+            total_assets: number;
+            /** Total Liabilities */
+            total_liabilities: number;
+            /** Total Equity */
+            total_equity: number;
+            /** Net Income */
+            net_income: number;
+            /** Total Liabilities And Equity */
+            total_liabilities_and_equity: number;
+            /** Balanced */
+            balanced: boolean;
+        };
         /** Body_login_api_auth_login_post */
         Body_login_api_auth_login_post: {
             /** Grant Type */
@@ -1248,6 +1353,18 @@ export interface components {
             /** Qty */
             qty: number;
         };
+        /**
+         * FinancialRow
+         * @description 손익계산서·재무상태표 1행(계정별 금액, 정상잔액 방향 양수).
+         */
+        FinancialRow: {
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Amount */
+            amount: number;
+        };
         /** GLRebuildOut */
         GLRebuildOut: {
             /** Movement Entries */
@@ -1262,6 +1379,32 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * IncomeStatementOut
+         * @description 간이 손익계산서(§7): 수익 − 비용 = 당기순이익. 기간 필터.
+         */
+        IncomeStatementOut: {
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
+            /**
+             * Revenues
+             * @default []
+             */
+            revenues: components["schemas"]["FinancialRow"][];
+            /**
+             * Expenses
+             * @default []
+             */
+            expenses: components["schemas"]["FinancialRow"][];
+            /** Total Revenue */
+            total_revenue: number;
+            /** Total Expense */
+            total_expense: number;
+            /** Net Income */
+            net_income: number;
         };
         /** ItemCreate */
         ItemCreate: {
@@ -1500,6 +1643,52 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["LedgerLineOut"][];
+        };
+        /**
+         * ManualEntryIn
+         * @description 수기 전표 입력(기초잔액·마감·수정 분개). Σ차변 == Σ대변 이어야 한다.
+         */
+        ManualEntryIn: {
+            /**
+             * Entry Date
+             * @description YYYY-MM-DD
+             */
+            entry_date: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Lines */
+            lines: components["schemas"]["ManualLineIn"][];
+        };
+        /**
+         * ManualLineIn
+         * @description 수기 전표 1라인. debit·credit 중 하나만 양수(0원 라인은 서버가 제거).
+         */
+        ManualLineIn: {
+            /**
+             * Account Code
+             * @description 계정코드 (예: 3110)
+             */
+            account_code: string;
+            /**
+             * Debit
+             * @default 0
+             */
+            debit: number;
+            /**
+             * Credit
+             * @default 0
+             */
+            credit: number;
+            /** Partner Id */
+            partner_id?: number | null;
+            /**
+             * Memo
+             * @default
+             */
+            memo: string;
         };
         /** MarginSummary */
         MarginSummary: {
@@ -5065,6 +5254,68 @@ export interface operations {
             };
         };
     };
+    delete_manual_entry_api_gl_journal__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_entry_api_gl_manual_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualEntryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     account_ledger_api_gl_ledger_get: {
         parameters: {
             query: {
@@ -5122,6 +5373,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrialBalanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    income_statement_api_gl_income_statement_get: {
+        parameters: {
+            query?: {
+                /** @description 기간 시작 YYYY-MM-DD */
+                date_from?: string | null;
+                /** @description 기간 종료 YYYY-MM-DD */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomeStatementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    balance_sheet_api_gl_balance_sheet_get: {
+        parameters: {
+            query?: {
+                /** @description 기준일 YYYY-MM-DD(이하 누계, 미지정 시 전체) */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceSheetOut"];
                 };
             };
             /** @description Validation Error */

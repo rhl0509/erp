@@ -15,10 +15,11 @@ from ..models import Account, JournalEntry, JournalLine, Partner, User
 from ..schemas import (
     Page, JournalEntryOut, JournalLineOut, LedgerOut, LedgerLineOut,
     TrialBalanceOut, TrialBalanceRow, ReconcileOut, GLRebuildOut,
+    ManualEntryIn, IncomeStatementOut, BalanceSheetOut, FinancialRow,
 )
 from ..deps import require_permission
 from ..services import paginate, record_audit
-from ..gl import rebuild_gl, reconcile, GLError
+from ..gl import rebuild_gl, reconcile, post_manual_entry, GLError
 
 router = APIRouter(prefix="/api/gl", tags=["gl"])
 
@@ -104,6 +105,52 @@ def get_journal_entry(
     if not e:
         raise HTTPException(status_code=404, detail="전표를 찾을 수 없습니다")
     return _entry_out(e, _partner_names(db, [e]))
+
+
+# ---------- S6: 수기 전표(MANUAL) ----------
+@router.post("/manual", response_model=JournalEntryOut, status_code=201)
+def create_manual_entry(
+    payload: ManualEntryIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("payment:write")),
+):
+    """수기 전표 등록(기초잔액·마감·수정 분개). 차대 균형은 스키마·서비스가
+    이중 검증한다. source_type=MANUAL, source_id=NULL 이라 rebuild 가 보존한다."""
+    try:
+        entry = post_manual_entry(
+            db, entry_date=payload.entry_date, description=payload.description,
+            lines=[l.model_dump() for l in payload.lines],
+        )
+    except GLError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    record_audit(db, user, "CREATE", "gl", entry.id,
+                 after={"entry_no": entry.entry_no, "description": entry.description})
+    db.commit()
+    db.refresh(entry)
+    return _entry_out(entry, _partner_names(db, [entry]))
+
+
+@router.delete("/journal/{entry_id}", status_code=204)
+def delete_manual_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("payment:write")),
+):
+    """수기 전표만 직접 삭제 가능. 자동 전기(MOVEMENT/PAYMENT) 전표는 원천 문서를
+    삭제해야 동반 삭제되므로(§9-4) 여기서 지우면 대사가 깨진다 — 400 으로 막는다."""
+    e = db.get(JournalEntry, entry_id)
+    if not e:
+        raise HTTPException(status_code=404, detail="전표를 찾을 수 없습니다")
+    if e.source_type != "MANUAL":
+        raise HTTPException(
+            status_code=400,
+            detail="자동 전기된 전표는 원천 문서에서만 삭제할 수 있습니다(수기 전표만 직접 삭제 가능)",
+        )
+    before = {"entry_no": e.entry_no, "description": e.description}
+    db.delete(e)   # 라인은 relationship cascade(delete-orphan)로 함께 삭제
+    record_audit(db, user, "DELETE", "gl", entry_id, before=before)
+    db.commit()
 
 
 # ---------- 계정별원장 ----------
@@ -217,6 +264,94 @@ def trial_balance(
         date_from=date_from, date_to=date_to, rows=out_rows,
         total_debit=float(total_debit), total_credit=float(total_credit),
         balanced=(total_debit == total_credit),
+    )
+
+
+# ---------- S6: 간이 재무제표 (손익계산서 / 재무상태표) ----------
+def _account_nets(
+    db: Session, account_types: tuple[str, ...],
+    *, date_from: str | None = None, date_to: str | None = None,
+) -> list[tuple[Account, Decimal]]:
+    """계정유형별 (Account, net_debit=Σdebit−Σcredit). entry_date 기간 필터.
+    거래 없는 활성 계정도 0 으로 포함(시산표와 동일 관례). MANUAL 포함 —
+    재무제표는 총계 관점이라 수기 분개도 반영해야 한다."""
+    agg = (
+        select(
+            JournalLine.account_id.label("aid"),
+            func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0).label("net"),
+        )
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+    )
+    if date_from:
+        agg = agg.where(JournalEntry.entry_date >= date_from)
+    if date_to:
+        agg = agg.where(JournalEntry.entry_date <= date_to)
+    agg = agg.group_by(JournalLine.account_id).subquery()
+
+    rows = db.execute(
+        select(Account, func.coalesce(agg.c.net, 0))
+        .outerjoin(agg, agg.c.aid == Account.id)
+        .where(Account.account_type.in_(account_types), Account.is_active.is_(True))
+        .order_by(Account.code.asc())
+    ).all()
+    return [(acct, Decimal(str(net or 0))) for acct, net in rows]
+
+
+@router.get("/income-statement", response_model=IncomeStatementOut)
+def income_statement(
+    date_from: str | None = Query(None, description="기간 시작 YYYY-MM-DD"),
+    date_to: str | None = Query(None, description="기간 종료 YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("payment:read")),
+):
+    """간이 손익계산서: 수익 − 비용 = 당기순이익(§7). 수익은 대변 정상잔액,
+    비용은 차변 정상잔액이라 각각 부호를 뒤집어 양수로 표시한다."""
+    rev = _account_nets(db, ("revenue",), date_from=date_from, date_to=date_to)
+    exp = _account_nets(db, ("expense",), date_from=date_from, date_to=date_to)
+    revenues = [FinancialRow(account_code=a.code, account_name=a.name, amount=float(-net)) for a, net in rev]
+    expenses = [FinancialRow(account_code=a.code, account_name=a.name, amount=float(net)) for a, net in exp]
+    total_revenue = float(sum((-net for _, net in rev), Decimal("0")))
+    total_expense = float(sum((net for _, net in exp), Decimal("0")))
+    return IncomeStatementOut(
+        date_from=date_from, date_to=date_to,
+        revenues=revenues, expenses=expenses,
+        total_revenue=total_revenue, total_expense=total_expense,
+        net_income=total_revenue - total_expense,
+    )
+
+
+@router.get("/balance-sheet", response_model=BalanceSheetOut)
+def balance_sheet(
+    date_to: str | None = Query(None, description="기준일 YYYY-MM-DD(이하 누계, 미지정 시 전체)"),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("payment:read")),
+):
+    """간이 재무상태표: 자산 = 부채 + 자본 + 당기순이익(§7). 마감 분개를 두지
+    않으므로 당기순이익(손익계정 누계)을 자본 아래 별도 표시한다. 시산표가
+    균형이면 항상 대차가 맞는다(각 전표가 자기완결적이므로)."""
+    assets = _account_nets(db, ("asset",), date_to=date_to)
+    liabs = _account_nets(db, ("liability",), date_to=date_to)
+    equity = _account_nets(db, ("equity",), date_to=date_to)
+    rev = _account_nets(db, ("revenue",), date_to=date_to)
+    exp = _account_nets(db, ("expense",), date_to=date_to)
+
+    asset_rows = [FinancialRow(account_code=a.code, account_name=a.name, amount=float(net)) for a, net in assets]
+    liab_rows = [FinancialRow(account_code=a.code, account_name=a.name, amount=float(-net)) for a, net in liabs]
+    equity_rows = [FinancialRow(account_code=a.code, account_name=a.name, amount=float(-net)) for a, net in equity]
+
+    total_assets = float(sum((net for _, net in assets), Decimal("0")))
+    total_liabilities = float(sum((-net for _, net in liabs), Decimal("0")))
+    total_equity = float(sum((-net for _, net in equity), Decimal("0")))
+    net_income = float(
+        sum((-net for _, net in rev), Decimal("0")) - sum((net for _, net in exp), Decimal("0"))
+    )
+    tle = total_liabilities + total_equity + net_income
+    return BalanceSheetOut(
+        date_to=date_to, assets=asset_rows, liabilities=liab_rows, equity=equity_rows,
+        total_assets=total_assets, total_liabilities=total_liabilities,
+        total_equity=total_equity, net_income=net_income,
+        total_liabilities_and_equity=tle,
+        balanced=round(total_assets, 4) == round(tle, 4),
     )
 
 

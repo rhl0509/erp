@@ -102,3 +102,85 @@
   color: var(--muted);
   padding: var(--s4) 0;
 }
+
+/* ===== S6: 수기 전표 등록 폼 ===== */
+/* 전표일자·적요 상단 메타 */
+.manualMeta {
+  display: flex;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--t-cap);
+  color: var(--muted);
+}
+
+.field > span {
+  font-weight: 600;
+}
+
+.grow {
+  flex: 1 1 220px;
+}
+
+/* 라인 편집 그리드 — 계정 / 차변 / 대변 / 적요 / 삭제 */
+.lineHead,
+.lineRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.6fr) 1fr 1fr minmax(120px, 1.2fr) 32px;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.lineHead {
+  padding: 0 2px var(--s2);
+  font-size: var(--t-cap);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.lineRow {
+  margin-bottom: var(--s2);
+}
+
+.numHead {
+  text-align: right;
+}
+
+/* 차/대 숫자 입력 — 우측 정렬·tabular */
+.numInput {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 라인 삭제 버튼(모노크롬 X) */
+.removeBtn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  transition: border-color var(--tr), color var(--tr);
+}
+
+.removeBtn:hover:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.removeBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.addLineWrap {
+  margin-top: var(--s2);
+}

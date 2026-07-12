@@ -27,6 +27,9 @@ type ReconcileItem = components["schemas"]["ReconcileItem"];
 type JournalEntry = components["schemas"]["JournalEntryOut"];
 type JournalLine = components["schemas"]["JournalLineOut"];
 type LedgerOut = components["schemas"]["LedgerOut"];
+type IncomeStatementOut = components["schemas"]["IncomeStatementOut"];
+type BalanceSheetOut = components["schemas"]["BalanceSheetOut"];
+type FinancialRow = components["schemas"]["FinancialRow"];
 
 /** 레거시 페이지당 10건 패리티(다른 목록 페이지와 동일) */
 const PAGE_SIZE = 10;
@@ -77,12 +80,14 @@ function sourceTag(sourceType: string) {
 /** 계정 셀렉트 라벨 — "1130 상품" */
 const accountLabel = (r: TrialBalanceRow) => `${r.account_code} ${r.account_name}`;
 
-type GlTab = "trial" | "journal" | "ledger";
+type GlTab = "trial" | "journal" | "ledger" | "income" | "balance";
 
 const TABS: [GlTab, string][] = [
   ["trial", "시산표"],
   ["journal", "분개장"],
   ["ledger", "계정별원장"],
+  ["income", "손익계산서"],
+  ["balance", "재무상태표"],
 ];
 
 /**
@@ -99,7 +104,7 @@ export default function GlPage() {
         <div>
           <h2 className={styles.title}>총계정원장</h2>
           <p className={styles.subtitle}>
-            복식부기 전표(GL) — 시산표 · 분개장 · 계정별원장
+            복식부기 전표(GL) — 시산표 · 분개장 · 계정별원장 · 손익계산서 · 재무상태표
           </p>
         </div>
       </div>
@@ -122,6 +127,8 @@ export default function GlPage() {
       {tab === "trial" && <TrialBalanceView />}
       {tab === "journal" && <JournalView />}
       {tab === "ledger" && <LedgerView />}
+      {tab === "income" && <IncomeStatementView />}
+      {tab === "balance" && <BalanceSheetView />}
     </section>
   );
 }
@@ -321,6 +328,8 @@ function TrialBalanceView() {
 // ==================== 분개장 ====================
 
 function JournalView() {
+  const { can } = useAuth();
+  const canWrite = can("payment:write");
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
   const [sourceType, setSourceType] = useState("");
@@ -329,6 +338,7 @@ function JournalView() {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
 
   // 레거시 debounce(…, 300) 패리티 — 입력 후 300ms 뒤 검색 적용 + 1페이지로
   useEffect(() => {
@@ -475,6 +485,11 @@ function JournalView() {
             title="종료일"
           />
           <Spacer />
+          {canWrite && (
+            <Button variant="primary" size="sm" onClick={() => setManualOpen(true)}>
+              수기 전표 등록
+            </Button>
+          )}
         </Toolbar>
         <DataTable
           columns={columns}
@@ -499,6 +514,7 @@ function JournalView() {
       {detailId !== null && (
         <JournalEntryModal entryId={detailId} onClose={() => setDetailId(null)} />
       )}
+      {manualOpen && <ManualEntryModal onClose={() => setManualOpen(false)} />}
     </>
   );
 }
@@ -515,6 +531,10 @@ function JournalEntryModal({
   entryId: number;
   onClose: () => void;
 }) {
+  const { can } = useAuth();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState(false);
   const detail = useQuery({
     queryKey: ["gl", "journal", "detail", entryId],
     queryFn: async () =>
@@ -526,6 +546,28 @@ function JournalEntryModal({
   });
 
   const e = detail.data;
+  // 수기 전표만 직접 삭제 가능(자동 전기 전표는 원천 문서에서 삭제해야 대사 유지)
+  const canDelete = can("payment:write") && e?.source_type === "MANUAL";
+
+  const doDelete = async () => {
+    if (!e) return;
+    if (!window.confirm(`수기 전표 ${e.entry_no} 을(를) 삭제할까요?`)) return;
+    setDeleting(true);
+    try {
+      unwrap(
+        await client.DELETE("/api/gl/journal/{entry_id}", {
+          params: { path: { entry_id: entryId } },
+        }),
+      );
+      toast("수기 전표를 삭제했습니다.");
+      void queryClient.invalidateQueries({ queryKey: ["gl"] });
+      onClose();
+    } catch (err) {
+      toast(errorMessage(err), true);
+    } finally {
+      setDeleting(false);
+    }
+  };
   // 라인 + 차대합 행(복식부기 검산 표시) 합성
   const rows = useMemo(() => {
     if (!e) return undefined;
@@ -585,9 +627,20 @@ function JournalEntryModal({
       onClose={onClose}
       wide
       footer={
-        <Button variant="ghost" onClick={onClose}>
-          닫기
-        </Button>
+        <>
+          {canDelete && (
+            <Button
+              variant="danger"
+              onClick={() => void doDelete()}
+              disabled={deleting}
+            >
+              {deleting ? "삭제 중…" : "삭제"}
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            닫기
+          </Button>
+        </>
       }
     >
       {detail.isPending ? (
@@ -842,6 +895,462 @@ function LedgerView() {
       {detailId !== null && (
         <JournalEntryModal entryId={detailId} onClose={() => setDetailId(null)} />
       )}
+    </>
+  );
+}
+
+// ==================== 수기 전표 등록 모달 ====================
+
+type ManualLine = { account_code: string; debit: string; credit: string; memo: string };
+
+const emptyLine = (): ManualLine => ({ account_code: "", debit: "", credit: "", memo: "" });
+
+/** 오늘 날짜 YYYY-MM-DD (기본 전표일자) */
+function todayStr() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * 수기 전표(MANUAL) 등록 — 기초잔액·마감·수정 분개(3110 상대가 전형).
+ * 차대 균형이 맞아야 저장 버튼이 열린다(서버도 이중 검증). 저장 후 GL 전체 refetch.
+ */
+function ManualEntryModal({ onClose }: { onClose: () => void }) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [entryDate, setEntryDate] = useState(todayStr());
+  const [description, setDescription] = useState("");
+  const [lines, setLines] = useState<ManualLine[]>([emptyLine(), emptyLine()]);
+  const [saving, setSaving] = useState(false);
+
+  // 계정 옵션 — 시산표 활성 12계정(쿼리 캐시 공유)
+  const accounts = useQuery({
+    queryKey: ["gl", "trial-balance"],
+    queryFn: async () => unwrap(await client.GET("/api/gl/trial-balance")),
+  });
+
+  const setLine = (i: number, patch: Partial<ManualLine>) =>
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const addLine = () => setLines((prev) => [...prev, emptyLine()]);
+  const removeLine = (i: number) =>
+    setLines((prev) => (prev.length <= 2 ? prev : prev.filter((_, idx) => idx !== i)));
+
+  const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
+  const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const balanced = Math.round((totalDebit - totalCredit) * 10000) === 0;
+  const hasAmount = totalDebit > 0;
+  // 코드 지정 + 금액 있는 라인이 2개 이상, 차대 균형이어야 저장 가능
+  const validLines = lines.filter(
+    (l) => l.account_code && (Number(l.debit) > 0 || Number(l.credit) > 0),
+  );
+  const canSave = balanced && hasAmount && validLines.length >= 2;
+
+  const doSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      unwrap(
+        await client.POST("/api/gl/manual", {
+          body: {
+            entry_date: entryDate,
+            description,
+            lines: validLines.map((l) => ({
+              account_code: l.account_code,
+              debit: Number(l.debit) || 0,
+              credit: Number(l.credit) || 0,
+              memo: l.memo,
+            })),
+          },
+        }),
+      );
+      toast("수기 전표를 등록했습니다.");
+      void queryClient.invalidateQueries({ queryKey: ["gl"] });
+      onClose();
+    } catch (err) {
+      toast(errorMessage(err), true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const accountOptions = accounts.data?.rows ?? [];
+
+  return (
+    <Modal
+      title="수기 전표 등록"
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <span className={balanced ? styles.muted : styles.mismatch}>
+            차 {amt(totalDebit)} · 대 {amt(totalCredit)}
+            {balanced ? " (일치)" : " (불일치)"}
+          </span>
+          <Spacer />
+          <Button variant="ghost" onClick={onClose}>
+            취소
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => void doSave()}
+            disabled={!canSave || saving}
+          >
+            {saving ? "저장 중…" : "저장"}
+          </Button>
+        </>
+      }
+    >
+      <div className={styles.manualMeta}>
+        <label className={styles.field}>
+          <span>전표일자</span>
+          <input
+            type="date"
+            className={styles.dateInput}
+            value={entryDate}
+            onChange={(ev) => setEntryDate(ev.target.value)}
+          />
+        </label>
+        <label className={`${styles.field} ${styles.grow}`}>
+          <span>적요</span>
+          <input
+            type="text"
+            value={description}
+            onChange={(ev) => setDescription(ev.target.value)}
+            placeholder="예: 기초 재고 잔액"
+          />
+        </label>
+      </div>
+
+      <div className={styles.lineHead}>
+        <span>계정</span>
+        <span className={styles.numHead}>차변</span>
+        <span className={styles.numHead}>대변</span>
+        <span>적요</span>
+        <span />
+      </div>
+      {lines.map((l, i) => (
+        <div key={i} className={styles.lineRow}>
+          <select
+            value={l.account_code}
+            onChange={(ev) => setLine(i, { account_code: ev.target.value })}
+            aria-label={`라인 ${i + 1} 계정`}
+          >
+            <option value="">계정 선택…</option>
+            {accountOptions.map((r) => (
+              <option key={r.account_code} value={r.account_code}>
+                {accountLabel(r)}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            className={styles.numInput}
+            value={l.debit}
+            onChange={(ev) => setLine(i, { debit: ev.target.value, credit: "" })}
+            aria-label={`라인 ${i + 1} 차변`}
+          />
+          <input
+            type="number"
+            min="0"
+            step="1"
+            className={styles.numInput}
+            value={l.credit}
+            onChange={(ev) => setLine(i, { credit: ev.target.value, debit: "" })}
+            aria-label={`라인 ${i + 1} 대변`}
+          />
+          <input
+            type="text"
+            value={l.memo}
+            onChange={(ev) => setLine(i, { memo: ev.target.value })}
+            placeholder="(선택)"
+            aria-label={`라인 ${i + 1} 적요`}
+          />
+          <button
+            type="button"
+            className={styles.removeBtn}
+            onClick={() => removeLine(i)}
+            disabled={lines.length <= 2}
+            aria-label={`라인 ${i + 1} 삭제`}
+            title="라인 삭제"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <div className={styles.addLineWrap}>
+        <Button variant="ghost" size="sm" onClick={addLine}>
+          + 라인 추가
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+// ==================== 손익계산서 / 재무상태표 공용 ====================
+
+/** 재무제표 섹션 표(FinancialRow[] + 합계 행). 정상잔액 방향 양수 표시. */
+function FinancialTable({
+  rows,
+  totalLabel,
+  total,
+  loading,
+  error,
+}: {
+  rows: FinancialRow[] | undefined;
+  totalLabel: string;
+  total: number | undefined;
+  loading: boolean;
+  error: unknown;
+}) {
+  const TOTAL = "__ftotal__";
+  const data = useMemo(() => {
+    if (!rows) return rows;
+    const totalRow: FinancialRow = {
+      account_code: TOTAL,
+      account_name: totalLabel,
+      amount: total ?? 0,
+    };
+    return [...rows, totalRow];
+  }, [rows, total, totalLabel]);
+  const isTotal = (r: FinancialRow) => r.account_code === TOTAL;
+
+  const columns: Column<FinancialRow>[] = [
+    { key: "account_code", header: "코드", code: true, render: (r) => (isTotal(r) ? "" : r.account_code) },
+    { key: "account_name", header: "계정명", render: (r) => (isTotal(r) ? <b>{r.account_name}</b> : r.account_name) },
+    { key: "amount", header: "금액", num: true, render: (r) => amt(r.amount) },
+  ];
+  return (
+    <DataTable
+      columns={columns}
+      rows={error ? [] : data}
+      rowKey={(r) => r.account_code}
+      loading={loading}
+      emptyText={error ? errorMessage(error) : "데이터가 없습니다."}
+      rowClassName={(r) => (isTotal(r) ? styles.totalRow : undefined)}
+    />
+  );
+}
+
+/** 기간 필터(from~to) 공용 툴바 조각 */
+function PeriodFilter({
+  dateFrom,
+  dateTo,
+  onFrom,
+  onTo,
+  fromLabel = "시작일",
+}: {
+  dateFrom: string;
+  dateTo: string;
+  onFrom?: (v: string) => void;
+  onTo: (v: string) => void;
+  fromLabel?: string;
+}) {
+  return (
+    <>
+      {onFrom && (
+        <>
+          <input
+            type="date"
+            className={styles.dateInput}
+            value={dateFrom}
+            onChange={(e) => onFrom(e.target.value)}
+            aria-label={fromLabel}
+            title={fromLabel}
+          />
+          <span className={styles.tilde}>~</span>
+        </>
+      )}
+      <input
+        type="date"
+        className={styles.dateInput}
+        value={dateTo}
+        onChange={(e) => onTo(e.target.value)}
+        aria-label="종료일"
+        title="종료일"
+      />
+    </>
+  );
+}
+
+// ==================== 손익계산서 ====================
+
+function IncomeStatementView() {
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const is = useQuery({
+    queryKey: ["gl", "income-statement", { from: dateFrom, to: dateTo }],
+    queryFn: async () =>
+      unwrap(
+        await client.GET("/api/gl/income-statement", {
+          params: {
+            query: {
+              ...(dateFrom ? { date_from: dateFrom } : {}),
+              ...(dateTo ? { date_to: dateTo } : {}),
+            },
+          },
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+
+  const d = is.data as IncomeStatementOut | undefined;
+  const stat = (v: number | undefined) => (is.isPending ? "…" : is.isError || d == null ? "-" : amt(v ?? 0));
+
+  return (
+    <>
+      <div className={styles.cards}>
+        <StatCard label="총수익" value={stat(d?.total_revenue)} foot="수익 계정 합(대변 정상)" />
+        <StatCard label="총비용" value={stat(d?.total_expense)} foot="비용 계정 합(차변 정상)" />
+        <StatCard
+          smallValue
+          label="당기순이익"
+          value={
+            is.isPending ? "…" : is.isError || d == null ? "-" : (
+              <span className={(d.net_income ?? 0) < 0 ? styles.mismatch : undefined}>
+                {amt(d.net_income)}
+              </span>
+            )
+          }
+          foot="수익 − 비용"
+        />
+      </div>
+
+      <Panel>
+        <Toolbar>
+          <PeriodFilter
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onFrom={setDateFrom}
+            onTo={setDateTo}
+          />
+          <Spacer />
+        </Toolbar>
+      </Panel>
+
+      <Panel>
+        <PanelHead title="수익" />
+        <FinancialTable
+          rows={d?.revenues}
+          totalLabel="수익 합계"
+          total={d?.total_revenue}
+          loading={is.isPending}
+          error={is.isError ? is.error : null}
+        />
+      </Panel>
+      <Panel>
+        <PanelHead title="비용" />
+        <FinancialTable
+          rows={d?.expenses}
+          totalLabel="비용 합계"
+          total={d?.total_expense}
+          loading={is.isPending}
+          error={is.isError ? is.error : null}
+        />
+      </Panel>
+    </>
+  );
+}
+
+// ==================== 재무상태표 ====================
+
+function BalanceSheetView() {
+  const [dateTo, setDateTo] = useState("");
+
+  const bs = useQuery({
+    queryKey: ["gl", "balance-sheet", { to: dateTo }],
+    queryFn: async () =>
+      unwrap(
+        await client.GET("/api/gl/balance-sheet", {
+          params: { query: { ...(dateTo ? { date_to: dateTo } : {}) } },
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+
+  const d = bs.data as BalanceSheetOut | undefined;
+  const stat = (v: number | undefined) => (bs.isPending ? "…" : bs.isError || d == null ? "-" : amt(v ?? 0));
+
+  // 자본 섹션 = 자본계정 + 당기순이익(미마감 잔여손익) 합성 행
+  const equityRows = useMemo(() => {
+    if (!d) return undefined;
+    const ni: FinancialRow = {
+      account_code: "__ni__",
+      account_name: "당기순이익 (미마감)",
+      amount: d.net_income,
+    };
+    return [...d.equity, ni];
+  }, [d]);
+
+  return (
+    <>
+      <div className={styles.cards}>
+        <StatCard label="총자산" value={stat(d?.total_assets)} foot="자산 계정 합" />
+        <StatCard label="총부채" value={stat(d?.total_liabilities)} foot="부채 계정 합" />
+        <StatCard
+          label="자본 + 당기순이익"
+          value={stat(d ? d.total_equity + d.net_income : undefined)}
+          foot={d && !bs.isError ? `자본 ${amt(d.total_equity)} · 순이익 ${amt(d.net_income)}` : "자본 · 순이익"}
+        />
+        <StatCard
+          smallValue
+          label="대차 평형"
+          value={
+            bs.isPending ? "…" : bs.isError || d == null ? "-" : d.balanced ? (
+              "일치"
+            ) : (
+              <span className={styles.mismatch}>불일치!</span>
+            )
+          }
+          foot={
+            d && !bs.isError
+              ? `자산 ${amt(d.total_assets)} = 부채+자본 ${amt(d.total_liabilities_and_equity)}`
+              : "자산 = 부채 + 자본 + 순이익"
+          }
+        />
+      </div>
+
+      <Panel>
+        <Toolbar>
+          <span className={styles.muted}>기준일</span>
+          <PeriodFilter dateFrom="" dateTo={dateTo} onTo={setDateTo} />
+          <Spacer />
+        </Toolbar>
+      </Panel>
+
+      <Panel>
+        <PanelHead title="자산" />
+        <FinancialTable
+          rows={d?.assets}
+          totalLabel="자산 총계"
+          total={d?.total_assets}
+          loading={bs.isPending}
+          error={bs.isError ? bs.error : null}
+        />
+      </Panel>
+      <Panel>
+        <PanelHead title="부채" />
+        <FinancialTable
+          rows={d?.liabilities}
+          totalLabel="부채 총계"
+          total={d?.total_liabilities}
+          loading={bs.isPending}
+          error={bs.isError ? bs.error : null}
+        />
+      </Panel>
+      <Panel>
+        <PanelHead title="자본" />
+        <FinancialTable
+          rows={equityRows}
+          totalLabel="자본 총계 (당기순이익 포함)"
+          total={d ? d.total_equity + d.net_income : undefined}
+          loading={bs.isPending}
+          error={bs.isError ? bs.error : null}
+        />
+      </Panel>
     </>
   );
 }

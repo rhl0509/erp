@@ -720,3 +720,66 @@ class GLRebuildOut(BaseModel):
     payment_entries: int
     total_entries: int
     reconcile: ReconcileOut
+
+
+# ---------- S6: 수기 전표(MANUAL) / 간이 재무제표 ----------
+class ManualLineIn(BaseModel):
+    """수기 전표 1라인. debit·credit 중 하나만 양수(0원 라인은 서버가 제거)."""
+    account_code: str = Field(..., description="계정코드 (예: 3110)")
+    debit: float = Field(0, ge=0)
+    credit: float = Field(0, ge=0)
+    partner_id: int | None = None
+    memo: str = ""
+
+
+class ManualEntryIn(BaseModel):
+    """수기 전표 입력(기초잔액·마감·수정 분개). Σ차변 == Σ대변 이어야 한다."""
+    entry_date: str = Field(..., description="YYYY-MM-DD")
+    description: str = ""
+    lines: list[ManualLineIn] = Field(..., min_length=2)
+
+    @model_validator(mode="after")
+    def _check_balanced(self):
+        td = sum(l.debit for l in self.lines)
+        tc = sum(l.credit for l in self.lines)
+        if round(td, 4) != round(tc, 4):
+            raise ValueError(f"차대 불일치: 차변 {td} != 대변 {tc}")
+        if td == 0:
+            raise ValueError("전표 금액이 0 입니다")
+        for l in self.lines:
+            if l.debit > 0 and l.credit > 0:
+                raise ValueError(f"한 라인에 차변·대변을 동시에 기입할 수 없습니다 ({l.account_code})")
+        return self
+
+
+class FinancialRow(BaseModel):
+    """손익계산서·재무상태표 1행(계정별 금액, 정상잔액 방향 양수)."""
+    account_code: str
+    account_name: str
+    amount: float
+
+
+class IncomeStatementOut(BaseModel):
+    """간이 손익계산서(§7): 수익 − 비용 = 당기순이익. 기간 필터."""
+    date_from: str | None = None
+    date_to: str | None = None
+    revenues: list[FinancialRow] = []
+    expenses: list[FinancialRow] = []
+    total_revenue: float
+    total_expense: float
+    net_income: float          # 수익 − 비용
+
+
+class BalanceSheetOut(BaseModel):
+    """간이 재무상태표(§7): 자산 = 부채 + 자본 + 당기순이익(미마감). date_to 시점 누계.
+    마감 분개를 두지 않으므로 당기순이익은 손익계정에 남아 자본 아래 별도 표시한다."""
+    date_to: str | None = None
+    assets: list[FinancialRow] = []
+    liabilities: list[FinancialRow] = []
+    equity: list[FinancialRow] = []
+    total_assets: float
+    total_liabilities: float
+    total_equity: float        # 자본계정 합(당기순이익 제외)
+    net_income: float          # 손익계정 누계(수익 − 비용)
+    total_liabilities_and_equity: float   # 부채 + 자본 + 당기순이익
+    balanced: bool             # 자산 == 부채+자본+당기순이익

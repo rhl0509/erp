@@ -454,3 +454,140 @@ def test_rebuild_with_transfer_history(client, admin):
           warehouse_id=wh2)
     r = _ok(client.post("/api/gl/rebuild", headers=admin))
     assert r["reconcile"]["ok"] and r["reconcile"]["inventory"]["diff"] == 0.0
+
+
+# ---------- S6: 수기 전표(MANUAL) ----------
+def _manual(client, admin, lines, *, entry_date="2026-01-01", description="수기"):
+    return client.post("/api/gl/manual", headers=admin, json={
+        "entry_date": entry_date, "description": description, "lines": lines,
+    })
+
+
+def test_manual_entry_create_and_balanced(client, admin):
+    """수기 전표 등록 → source_type=MANUAL·source_id 없음, 차대 균형, 분개장 노출."""
+    r = _ok(_manual(client, admin, [
+        {"account_code": "1130", "debit": 50000},
+        {"account_code": "3110", "credit": 50000},
+    ], description="기초 재고"))
+    assert r["source_type"] == "MANUAL" and r["source_id"] is None
+    assert r["entry_no"].startswith("JV-")
+    _assert_balanced(r)
+    # 분개장 MANUAL 필터로 조회됨
+    j = _ok(client.get("/api/gl/journal", headers=admin, params={"source_type": "MANUAL"}))
+    assert any(e["id"] == r["id"] for e in j["items"])
+    # 시산표는 여전히 균형
+    tb = _ok(client.get("/api/gl/trial-balance", headers=admin))
+    assert tb["balanced"]
+
+
+def test_manual_entry_rejects_unbalanced(client, admin):
+    """차대 불일치 수기 전표는 거부(스키마 검증 422)."""
+    r = _manual(client, admin, [
+        {"account_code": "1130", "debit": 50000},
+        {"account_code": "3110", "credit": 40000},
+    ])
+    assert r.status_code == 422
+
+
+def test_manual_entry_rejects_unknown_account(client, admin):
+    """미정의 계정코드 수기 전표는 400(GLError)."""
+    r = _manual(client, admin, [
+        {"account_code": "9999", "debit": 100},
+        {"account_code": "3110", "credit": 100},
+    ])
+    assert r.status_code == 400
+
+
+def test_manual_entry_excluded_from_subledger_reconcile(client, admin):
+    """1130 을 건드리는 수기 전표는 시산표엔 반영되지만 재대사(자동전기 대조)는
+    통과한다(MANUAL 제외). 계정별원장 1130 에는 수기분이 포함된다."""
+    iid = _item(client, admin, "GL수기재고품")
+    _move(client, admin, item_id=iid, movement_type="IN", quantity=10, unit_price=100)
+    before_1130 = _ok(client.get("/api/gl/ledger", headers=admin,
+                                 params={"account_code": "1130"}))["closing_balance"]
+
+    _ok(_manual(client, admin, [
+        {"account_code": "1130", "debit": 7000},
+        {"account_code": "3110", "credit": 7000},
+    ], description="기초 재고 가산"))
+
+    # 재대사는 여전히 OK (자동전기분만 valuation 과 대조)
+    rec = _ok(client.get("/api/gl/reconcile", headers=admin))
+    assert rec["ok"], rec
+    assert rec["inventory"]["diff"] == 0.0
+    # 원장(전체)에는 수기분 반영 → 1130 잔액 +7000
+    after_1130 = _ok(client.get("/api/gl/ledger", headers=admin,
+                                params={"account_code": "1130"}))["closing_balance"]
+    assert after_1130 == before_1130 + 7000
+
+
+def test_manual_entry_preserved_on_rebuild(client, admin):
+    """rebuild 는 자동전기분만 재생성하고 수기 전표는 보존한다(원천 없어 재생성 불가)."""
+    _mixed_flow(client, admin)
+    manual = _ok(_manual(client, admin, [
+        {"account_code": "1110", "debit": 30000},
+        {"account_code": "3110", "credit": 30000},
+    ], description="기초 현금"))
+
+    r = _ok(client.post("/api/gl/rebuild", headers=admin))
+    assert r["reconcile"]["ok"]
+    # 수기 전표가 그대로 남아 있다(같은 id 로 조회 가능)
+    still = _ok(client.get(f"/api/gl/journal/{manual['id']}", headers=admin))
+    assert still["source_type"] == "MANUAL"
+    m = _ok(client.get("/api/gl/journal", headers=admin, params={"source_type": "MANUAL"}))
+    assert m["total"] == 1
+
+
+def test_manual_entry_deletable_but_auto_not(client, admin):
+    """수기 전표는 직접 삭제 가능(204), 자동 전기 전표는 /journal 삭제 불가(400)."""
+    manual = _ok(_manual(client, admin, [
+        {"account_code": "1110", "debit": 100},
+        {"account_code": "3110", "credit": 100},
+    ]))
+    # 자동 전기 전표(MOVEMENT) 는 직접 삭제 거부
+    iid = _item(client, admin, "GL자동삭제품")
+    mv = _move(client, admin, item_id=iid, movement_type="IN", quantity=5, unit_price=100)
+    auto = _entry_for(client, admin, "MOVEMENT", mv["id"])
+    assert client.delete(f"/api/gl/journal/{auto['id']}", headers=admin).status_code == 400
+    # 수기 전표는 삭제됨
+    assert client.delete(f"/api/gl/journal/{manual['id']}", headers=admin).status_code == 204
+    assert client.get(f"/api/gl/journal/{manual['id']}", headers=admin).status_code == 404
+    # 자동 전표는 여전히 존재 → 재대사 유지
+    assert _ok(client.get("/api/gl/reconcile", headers=admin))["ok"]
+
+
+# ---------- S6: 간이 재무제표 ----------
+def test_income_statement(client, admin):
+    """손익계산서: 수익 − 비용 == 당기순이익, 4110·5110 이 margin 리포트와 일치."""
+    _mixed_flow(client, admin)
+    is_ = _ok(client.get("/api/gl/income-statement", headers=admin))
+    assert round(is_["total_revenue"] - is_["total_expense"], 4) == round(is_["net_income"], 4)
+    # 계정별 합 == 총계
+    assert round(sum(r["amount"] for r in is_["revenues"]), 4) == round(is_["total_revenue"], 4)
+    assert round(sum(r["amount"] for r in is_["expenses"]), 4) == round(is_["total_expense"], 4)
+    # 4110 순매출 == margin revenue
+    m = _ok(client.get("/api/costing/margin", headers=admin))
+    sales_row = next(r for r in is_["revenues"] if r["account_code"] == "4110")
+    assert sales_row["amount"] == float(m["revenue"])
+
+
+def test_balance_sheet_balances(client, admin):
+    """재무상태표: 자산 == 부채 + 자본 + 당기순이익(대차평형). 수기 기초 전표 포함해도 유지."""
+    _mixed_flow(client, admin)
+    _ok(_manual(client, admin, [
+        {"account_code": "1130", "debit": 12345},
+        {"account_code": "3110", "credit": 12345},
+    ], description="기초 재고"))
+    bs = _ok(client.get("/api/gl/balance-sheet", headers=admin))
+    assert bs["balanced"]
+    assert round(bs["total_assets"], 4) == round(bs["total_liabilities_and_equity"], 4)
+    assert round(bs["total_liabilities"] + bs["total_equity"] + bs["net_income"], 4) \
+        == round(bs["total_liabilities_and_equity"], 4)
+    # 당기순이익 == 손익계산서 net_income
+    is_ = _ok(client.get("/api/gl/income-statement", headers=admin))
+    assert round(bs["net_income"], 4) == round(is_["net_income"], 4)
+
+
+def test_financial_statements_require_permission(client, admin):
+    assert client.get("/api/gl/income-statement").status_code == 401
+    assert client.get("/api/gl/balance-sheet").status_code == 401
