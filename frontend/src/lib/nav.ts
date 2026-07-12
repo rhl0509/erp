@@ -27,6 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "valuation", label: "재고평가", href: "/valuation", perm: "stock:read" },
   { key: "payments", label: "결제", href: "/payments", perm: "payment:read" },
   { key: "aging", label: "채권/채무", href: "/aging", perm: "payment:read" },
+  { key: "gl", label: "총계정원장", href: "/gl", perm: "payment:read" },
   { key: "users", label: "회원", href: "/users", perm: "user:read" },
   { key: "audit", label: "감사로그", href: "/audit", perm: "audit:read" },
 ];

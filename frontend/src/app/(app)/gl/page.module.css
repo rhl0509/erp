@@ -1,0 +1,104 @@
+/* 총계정원장(GL) — page-head / 탭 / 재대사·원장 stat 카드 / 표 합성 행 강조 */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--t-cap);
+}
+
+/* 3뷰(시산표/분개장/계정별원장) 전환 탭 — aging AR/AP 토글과 같은 Button 조합 */
+.tabs {
+  display: flex;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+/* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링 — transactions 와 동일 규칙) */
+.dateInput {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--field);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+
+.dateInput:focus {
+  border-color: var(--ink);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+/* 기간 from ~ to 사이 물결(transactions 패리티) */
+.tilde {
+  color: var(--muted);
+}
+
+/* 출처 #source_id·원장 적요의 보조 표기(payments span.muted 패리티) */
+.muted {
+  color: var(--muted);
+}
+
+/* 합계 행(aging totalRow 패리티 — 모노크롬 강조) */
+.totalRow td {
+  background: var(--surface-2);
+  font-weight: 800;
+  border-top: 2px solid var(--ink);
+}
+
+/* 시산표 차대 불일치 합계 행 — 이중선으로 경고 강조(모노크롬) */
+.warnRow td {
+  border-top: 4px double var(--danger, #000);
+}
+
+/* 계정별원장 기초잔액 합성 행 */
+.openingRow td {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+/* 재대사 불일치 값 강조(모노크롬 — 굵게) */
+.mismatch {
+  font-weight: 800;
+}
+
+/* 모달 로딩/오류 문구(payments modalNote 관례) */
+.modalNote {
+  color: var(--muted);
+  padding: var(--s4) 0;
+}
+
+/* 전표 상세 상단 메타(일자·출처·적요) */
+.metaLine {
+  color: var(--muted);
+  font-size: var(--t-cap);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: var(--s4);
+}
+
+/* 원장 계정 미선택 안내 */
+.hint {
+  color: var(--muted);
+  padding: var(--s4) 0;
+}

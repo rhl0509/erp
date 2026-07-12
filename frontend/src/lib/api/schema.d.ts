@@ -806,6 +806,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/gl/journal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Journal
+         * @description 분개장(전표 목록 + 라인). 최신 전표가 위로 오도록 내림차순.
+         */
+        get: operations["list_journal_api_gl_journal_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/journal/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Journal Entry */
+        get: operations["get_journal_entry_api_gl_journal__entry_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Account Ledger
+         * @description 계정별원장: 기초잔액(기간 이전 누계) + 기간 라인 러닝밸런스 + 기말잔액.
+         *     잔액은 정상잔액 방향(normal_side) 기준 부호로 표시한다.
+         */
+        get: operations["account_ledger_api_gl_ledger_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/trial-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trial Balance
+         * @description 시산표: 계정별 차/대 합계·정상잔액 방향 잔액. Σ차변 == Σ대변이어야 한다.
+         *     활성 계정은 거래가 없어도 0 으로 표시한다(누락과 무거래를 구분).
+         */
+        get: operations["trial_balance_api_gl_trial_balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gl Reconcile
+         * @description GL 총계 vs 기존 보조원장 대조(§7): 1130==valuation, 1120==AR, 2110==AP,
+         *     시산표 균형. diff!=0 이면 rebuild 를 권고한다(운영 헬스체크용).
+         */
+        get: operations["gl_reconcile_api_gl_reconcile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Gl Rebuild
+         * @description GL 전체 재전기(백필과 동일 코드 경로, §6): 전 전표 삭제 후 원천 replay.
+         *     재대사가 통과해야 커밋하고, 실패하면 전체 롤백한다(부분 백필 금지).
+         */
+        post: operations["gl_rebuild_api_gl_rebuild_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/overview": {
         parameters: {
             query?: never;
@@ -1127,6 +1248,16 @@ export interface components {
             /** Qty */
             qty: number;
         };
+        /** GLRebuildOut */
+        GLRebuildOut: {
+            /** Movement Entries */
+            movement_entries: number;
+            /** Payment Entries */
+            payment_entries: number;
+            /** Total Entries */
+            total_entries: number;
+            reconcile: components["schemas"]["ReconcileOut"];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1255,6 +1386,121 @@ export interface components {
             /** Is Active */
             is_active?: boolean | null;
         };
+        /** JournalEntryOut */
+        JournalEntryOut: {
+            /** Id */
+            id: number;
+            /** Entry No */
+            entry_no: string;
+            /** Entry Date */
+            entry_date: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Source Type */
+            source_type: string;
+            /** Source Id */
+            source_id?: number | null;
+            /**
+             * Status
+             * @default posted
+             */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["JournalLineOut"][];
+        };
+        /** JournalLineOut */
+        JournalLineOut: {
+            /** Id */
+            id: number;
+            /** Line No */
+            line_no: number;
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Debit */
+            debit: number;
+            /** Credit */
+            credit: number;
+            /** Partner Id */
+            partner_id?: number | null;
+            /**
+             * Partner Name
+             * @default
+             */
+            partner_name: string;
+            /**
+             * Memo
+             * @default
+             */
+            memo: string;
+        };
+        /**
+         * LedgerLineOut
+         * @description 계정별원장 1행(전표 라인 + 러닝밸런스).
+         */
+        LedgerLineOut: {
+            /** Entry Id */
+            entry_id: number;
+            /** Entry No */
+            entry_no: string;
+            /** Entry Date */
+            entry_date: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Source Type */
+            source_type: string;
+            /** Source Id */
+            source_id?: number | null;
+            /** Debit */
+            debit: number;
+            /** Credit */
+            credit: number;
+            /** Balance */
+            balance: number;
+        };
+        /** LedgerOut */
+        LedgerOut: {
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Account Type */
+            account_type: string;
+            /** Normal Side */
+            normal_side: string;
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
+            /** Opening Balance */
+            opening_balance: number;
+            /** Total Debit */
+            total_debit: number;
+            /** Total Credit */
+            total_credit: number;
+            /** Closing Balance */
+            closing_balance: number;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["LedgerLineOut"][];
+        };
         /** MarginSummary */
         MarginSummary: {
             /** Revenue */
@@ -1332,6 +1578,19 @@ export interface components {
         Page_ItemOut_: {
             /** Items */
             items: components["schemas"]["ItemOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Pages */
+            pages: number;
+        };
+        /** Page[JournalEntryOut] */
+        Page_JournalEntryOut_: {
+            /** Items */
+            items: components["schemas"]["JournalEntryOut"][];
             /** Total */
             total: number;
             /** Page */
@@ -1924,6 +2183,38 @@ export interface components {
             lines: components["schemas"]["DocQtyLineIn"][];
         };
         /**
+         * ReconcileItem
+         * @description GL 총계 vs 기존 보조원장(원천 파생값) 대조 1항목.
+         */
+        ReconcileItem: {
+            /** Gl */
+            gl: number;
+            /** Expected */
+            expected: number;
+            /** Diff */
+            diff: number;
+            /** Ok */
+            ok: boolean;
+        };
+        /** ReconcileOut */
+        ReconcileOut: {
+            inventory: components["schemas"]["ReconcileItem"];
+            ar: components["schemas"]["ReconcileItem"];
+            ap: components["schemas"]["ReconcileItem"];
+            trial: components["schemas"]["ReconcileTrial"];
+            /** Ok */
+            ok: boolean;
+        };
+        /** ReconcileTrial */
+        ReconcileTrial: {
+            /** Debit */
+            debit: number;
+            /** Credit */
+            credit: number;
+            /** Ok */
+            ok: boolean;
+        };
+        /**
          * RegisterCreate
          * @description 공개 회원가입 입력. 역할·활성 여부는 지정 불가(비활성·무권한으로 생성).
          */
@@ -2490,6 +2781,41 @@ export interface components {
             purchase_count: number;
             /** Sales Count */
             sales_count: number;
+        };
+        /** TrialBalanceOut */
+        TrialBalanceOut: {
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["TrialBalanceRow"][];
+            /** Total Debit */
+            total_debit: number;
+            /** Total Credit */
+            total_credit: number;
+            /** Balanced */
+            balanced: boolean;
+        };
+        /** TrialBalanceRow */
+        TrialBalanceRow: {
+            /** Account Code */
+            account_code: string;
+            /** Account Name */
+            account_name: string;
+            /** Account Type */
+            account_type: string;
+            /** Normal Side */
+            normal_side: string;
+            /** Debit Total */
+            debit_total: number;
+            /** Credit Total */
+            credit_total: number;
+            /** Balance */
+            balance: number;
         };
         /** UserCreate */
         UserCreate: {
@@ -4660,6 +4986,191 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_journal_api_gl_journal_get: {
+        parameters: {
+            query?: {
+                /** @description entry_date 이상 (YYYY-MM-DD) */
+                date_from?: string | null;
+                /** @description entry_date 이하 (YYYY-MM-DD) */
+                date_to?: string | null;
+                /** @description MOVEMENT/PAYMENT/MANUAL 필터 */
+                source_type?: string | null;
+                /** @description 원천 id 필터(source_type 과 함께) */
+                source_id?: number | null;
+                /** @description 특정 계정이 포함된 전표만 */
+                account_code?: string | null;
+                /** @description 전표번호·적요 검색 */
+                q?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_JournalEntryOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_journal_entry_api_gl_journal__entry_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    account_ledger_api_gl_ledger_get: {
+        parameters: {
+            query: {
+                /** @description 계정코드 (예: 1130) */
+                account_code: string;
+                /** @description 기간 시작 YYYY-MM-DD */
+                date_from?: string | null;
+                /** @description 기간 종료 YYYY-MM-DD */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trial_balance_api_gl_trial_balance_get: {
+        parameters: {
+            query?: {
+                /** @description 기간 시작 YYYY-MM-DD(미지정 시 전체) */
+                date_from?: string | null;
+                /** @description 기간 종료 YYYY-MM-DD */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialBalanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gl_reconcile_api_gl_reconcile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileOut"];
+                };
+            };
+        };
+    };
+    gl_rebuild_api_gl_rebuild_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GLRebuildOut"];
                 };
             };
         };
