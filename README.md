@@ -4,7 +4,7 @@ ERP 공통 기반 + 거래처/품목 마스터 백엔드 (FastAPI + SQLAlchemy +
 이 문서는 **Windows OS 개발 환경** 기준입니다.
 
 포함된 것:
-- **웹 관리 콘솔(UI)** — 로그인/대시보드/거래처·품목 CRUD를 브라우저에서 바로 사용 (별도 빌드 불필요)
+- **웹 관리 콘솔(UI)** — Next.js 앱(`frontend/`). 로그인/대시보드/거래처·품목·재고·발주·수주·회계·총계정원장을 브라우저에서 사용 (실행법은 아래 참고)
 - 인증(JWT) + RBAC(역할/권한)
 - 채번 서비스 (행 잠금으로 동시성 안전)
 - 감사 로그 (생성/수정/삭제 이력 + 변경 전후 값)
@@ -118,13 +118,24 @@ alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
-- **웹 관리 콘솔: http://localhost:8000/** ← 가장 추천
+이 서버는 **API 전용**입니다(레거시 단일 HTML 콘솔은 2026-07 제거, 웹 UI 는 Next.js 앱으로 이관).
+
 - API 문서(Swagger): http://localhost:8000/docs
 - 헬스체크: http://localhost:8000/health
 
-> **가장 쉬운 사용법은 웹 콘솔입니다.** http://localhost:8000/ 에 접속해
-> `admin` / `admin1234` 로 로그인하면, 거래처·품목을 표·검색·페이지네이션이 있는
-> 화면에서 등록/수정/삭제할 수 있습니다. (개발자용으로는 `/docs` Swagger도 그대로 제공)
+### 웹 관리 콘솔(Next.js 앱) 실행 ← 실제 화면
+
+별도 터미널에서 `frontend/` 를 실행합니다(같은 origin 으로 `/api` → :8000 프록시).
+
+```powershell
+cd frontend
+npm install    # 최초 1회
+npm run dev     # http://localhost:3000
+```
+
+> 브라우저에서 **http://localhost:3000** 접속 후 `admin` / `admin1234` 로 로그인하면
+> 대시보드·거래처·품목·재고·발주/수주·회계·총계정원장을 화면에서 사용할 수 있습니다.
+> (백엔드 :8000 이 함께 떠 있어야 하며, 개발자용 API 는 :8000/docs Swagger 제공)
 
 ## 6. 명령줄에서 테스트 (curl)
 

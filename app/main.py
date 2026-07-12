@@ -1,11 +1,9 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
@@ -18,8 +16,6 @@ from .api import (
     auth, users, partners, items, stock, stats, reports, audit,
     purchase, sales, costing, payments, invoices, warehouses, gl,
 )
-
-STATIC_DIR = Path(__file__).parent / "static"
 
 
 @asynccontextmanager
@@ -35,7 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ERP Foundation API",
     version="0.2.0",
-    description="ERP 공통 기반 + 거래처/품목 마스터. 웹 화면은 첫 페이지(/)에서 바로 사용하세요.",
+    description="ERP 공통 기반 + 거래처/품목 마스터. 웹 UI 는 Next.js 앱(frontend/)에서 제공하며, 이 서버는 API(/api)·문서(/docs)를 담당한다.",
     lifespan=lifespan,
 )
 
@@ -144,15 +140,13 @@ def metrics():
     return render_metrics()
 
 
-# ---------- 웹 화면(클라이언트용 UI) ----------
-# 정적 자산과 첫 페이지를 함께 서빙한다. (API는 /api, 문서는 /docs)
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-
+# ---------- 루트 안내 ----------
+# 웹 UI 는 Next.js 앱(frontend/)이 담당한다(레거시 단일 HTML 콘솔은 2026-07 제거).
+# 이 서버는 API 전용이므로 루트는 진입 안내만 반환한다.
 @app.get("/", include_in_schema=False)
 def index():
-    index_file = STATIC_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return JSONResponse({"detail": "UI가 설치되지 않았습니다. /docs 를 이용하세요.", "code": "no_ui"})
+    return JSONResponse({
+        "service": "ERP Foundation API",
+        "detail": "웹 UI 는 Next.js 앱(frontend/)에서 제공합니다. API 문서는 /docs 를 이용하세요.",
+        "docs": "/docs",
+    })
