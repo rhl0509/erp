@@ -27,3 +27,120 @@
   gap: var(--s4);
   margin-bottom: var(--s6);
 }
+
+/* ===== 풀 대시보드 ===== */
+/* 재고부족 + 최근거래 2단(좁으면 1단) */
+.twoCol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--s4);
+  margin-top: var(--s6);
+}
+
+/* PanelHead 우측 "전체 보기" 링크 */
+.moreLink {
+  color: var(--muted);
+  font-size: var(--t-cap);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color var(--tr), border-color var(--tr);
+}
+.moreLink:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+/* 무권한 안내 */
+.noPerm,
+.hint {
+  color: var(--muted);
+  padding: var(--s4);
+  font-size: var(--t-cap);
+}
+
+/* 부족 수량 강조 */
+.shortage {
+  font-weight: 800;
+}
+
+/* ---- 6개월 추이 막대(monochrome) ---- */
+.trend {
+  padding: var(--s2) var(--s4) var(--s4);
+}
+
+.legend {
+  display: flex;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+  font-size: var(--t-cap);
+  color: var(--muted);
+}
+.legendSales::before,
+.legendPurchase::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.legendSales::before {
+  background: var(--ink);
+}
+.legendPurchase::before {
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.trendRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: 6px 0;
+}
+.trendRow + .trendRow {
+  border-top: 1px solid var(--line);
+}
+
+.trendPeriod {
+  flex: 0 0 68px;
+  font-size: var(--t-cap);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.trendBars {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.barLine {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.bar {
+  height: 12px;
+  border-radius: 2px;
+  min-width: 2px;
+  transition: width var(--tr);
+}
+.barSales {
+  background: var(--ink);
+}
+.barPurchase {
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.barVal {
+  font-size: var(--t-cap);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
