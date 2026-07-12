@@ -17,6 +17,33 @@ def test_login_me_permissions(client, admin):
     assert "*" in me["permissions"]
 
 
+def test_login_sets_httponly_session_cookie(client):
+    """로그인은 httpOnly 세션 쿠키를 심고, 그 쿠키만으로(Authorization 헤더 없이) 인증된다."""
+    r = client.post("/api/auth/login", data={"username": "admin", "password": "admin1234"})
+    assert r.status_code == 200
+    set_cookie = r.headers.get("set-cookie", "")
+    assert "erp_session=" in set_cookie and "HttpOnly" in set_cookie
+    assert client.cookies.get("erp_session")
+    # 헤더 없이 쿠키만으로 인증
+    me = client.get("/api/auth/me")
+    assert me.status_code == 200 and me.json()["username"] == "admin"
+
+
+def test_logout_clears_session_cookie(client):
+    """로그아웃은 세션 쿠키를 제거하고, 이후 쿠키 인증이 실패한다."""
+    client.post("/api/auth/login", data={"username": "admin", "password": "admin1234"})
+    assert client.get("/api/auth/me").status_code == 200          # 쿠키 인증 OK
+    assert client.post("/api/auth/logout").status_code == 204
+    client.cookies.clear()                                        # 삭제(Max-Age=0) 반영
+    assert client.get("/api/auth/me").status_code == 401          # 쿠키 없음 → 미인증
+
+
+def test_invalid_session_cookie_rejected(client):
+    """위조·손상된 세션 쿠키는 401(서명 검증 실패)."""
+    client.cookies.set("erp_session", "not-a-valid-jwt")
+    assert client.get("/api/auth/me").status_code == 401
+
+
 def test_requires_auth(client):
     assert client.get("/api/partners").status_code == 401
 

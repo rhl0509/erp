@@ -1,19 +1,37 @@
 import time
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..database import get_db
 from ..models import User
-from ..security import verify_password, create_access_token, hash_password
+from ..security import (
+    verify_password, create_access_token, hash_password, SESSION_COOKIE_NAME,
+)
 from ..schemas import Token, MeOut, RegisterCreate, UserOut, PasswordChange
 from ..deps import get_current_user, user_permissions
 from ..services import record_audit
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    """로그인 시 httpOnly 세션 쿠키를 심는다(Next 앱이 localStorage 없이 인증).
+    same-origin 프록시라 samesite=lax 로 충분하며, HTTPS 배포 시 secure 로 켠다.
+    max_age 는 토큰 만료와 맞춘다."""
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite=settings.cookie_samesite,
+        secure=settings.cookie_secure,
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
 
 
 class _RateLimiter:
@@ -81,7 +99,12 @@ def register(payload: RegisterCreate, request: Request, db: Session = Depends(ge
 
 
 @router.post("/login", response_model=Token)
-def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    request: Request,
+    response: Response,
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
     key = f"{_client_ip(request)}:{form.username.lower()}"
     if not _login_limiter.allowed(key):
         raise HTTPException(
@@ -99,7 +122,17 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Ses
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다")
 
     _login_limiter.clear(key)
-    return Token(access_token=create_access_token(user.id))
+    token = create_access_token(user.id)
+    # 쿠키(Next 앱)와 응답 본문 토큰(헤더 방식 클라이언트) 둘 다 제공 — 하위호환.
+    _set_session_cookie(response, token)
+    return Token(access_token=token)
+
+
+@router.post("/logout", status_code=204)
+def logout(response: Response):
+    """세션 쿠키를 제거한다. JWT 는 무상태라 서버측 무효화는 없고, 쿠키 클라이언트의
+    로그아웃은 쿠키 삭제로 이뤄진다(헤더 방식 클라이언트는 토큰 폐기로 로그아웃)."""
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
 
 
 @router.put("/me/password", status_code=204)

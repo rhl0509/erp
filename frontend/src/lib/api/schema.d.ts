@@ -41,6 +41,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description 세션 쿠키를 제거한다. JWT 는 무상태라 서버측 무효화는 없고, 쿠키 클라이언트의
+         *     로그아웃은 쿠키 삭제로 이뤄진다(헤더 방식 클라이언트는 토큰 폐기로 로그아웃).
+         */
+        post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/me/password": {
         parameters: {
             query?: never;
@@ -3208,12 +3229,32 @@ export interface operations {
             };
         };
     };
-    change_my_password_api_auth_me_password_put: {
+    logout_api_auth_logout_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    change_my_password_api_auth_me_password_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3244,7 +3285,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3255,6 +3298,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3271,7 +3323,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3300,7 +3354,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3333,7 +3389,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3346,6 +3404,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     update_user_api_users__user_id__put: {
@@ -3355,7 +3422,9 @@ export interface operations {
             path: {
                 user_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3388,7 +3457,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3399,6 +3470,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3417,7 +3497,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3446,7 +3528,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3481,7 +3565,9 @@ export interface operations {
             path: {
                 partner_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3512,7 +3598,9 @@ export interface operations {
             path: {
                 partner_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3547,7 +3635,9 @@ export interface operations {
             path: {
                 partner_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3583,7 +3673,9 @@ export interface operations {
             path: {
                 partner_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3614,7 +3706,9 @@ export interface operations {
             path: {
                 partner_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3645,7 +3739,9 @@ export interface operations {
             path: {
                 partner_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3683,7 +3779,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3712,7 +3810,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3747,7 +3847,9 @@ export interface operations {
             path: {
                 item_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3778,7 +3880,9 @@ export interface operations {
             path: {
                 item_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3813,7 +3917,9 @@ export interface operations {
             path: {
                 item_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3853,7 +3959,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3882,7 +3990,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3915,7 +4025,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3950,7 +4062,9 @@ export interface operations {
             path: {
                 movement_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3981,7 +4095,9 @@ export interface operations {
             path: {
                 movement_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4019,7 +4135,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4055,7 +4173,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4084,7 +4204,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4095,6 +4217,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4113,7 +4244,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4142,7 +4275,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4177,7 +4312,9 @@ export interface operations {
             path: {
                 warehouse_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4219,7 +4356,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4248,7 +4387,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4283,7 +4424,9 @@ export interface operations {
             path: {
                 po_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4314,7 +4457,9 @@ export interface operations {
             path: {
                 po_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4349,7 +4494,9 @@ export interface operations {
             path: {
                 po_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4378,7 +4525,9 @@ export interface operations {
             path: {
                 po_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4409,7 +4558,9 @@ export interface operations {
             path: {
                 po_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4444,7 +4595,9 @@ export interface operations {
             path: {
                 po_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4479,7 +4632,9 @@ export interface operations {
             path: {
                 po_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4517,7 +4672,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4546,7 +4703,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4581,7 +4740,9 @@ export interface operations {
             path: {
                 so_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4612,7 +4773,9 @@ export interface operations {
             path: {
                 so_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4647,7 +4810,9 @@ export interface operations {
             path: {
                 so_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4676,7 +4841,9 @@ export interface operations {
             path: {
                 so_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4707,7 +4874,9 @@ export interface operations {
             path: {
                 so_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4742,7 +4911,9 @@ export interface operations {
             path: {
                 so_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4777,7 +4948,9 @@ export interface operations {
             path: {
                 so_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4815,7 +4988,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4847,7 +5022,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4881,7 +5058,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4925,7 +5104,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4954,7 +5135,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4989,7 +5172,9 @@ export interface operations {
             path: {
                 payment_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5020,7 +5205,9 @@ export interface operations {
             path: {
                 payment_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5060,7 +5247,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5089,7 +5278,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -5124,7 +5315,9 @@ export interface operations {
             path: {
                 inv_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5155,7 +5348,9 @@ export interface operations {
             path: {
                 inv_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5199,7 +5394,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5230,7 +5427,9 @@ export interface operations {
             path: {
                 entry_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5261,7 +5460,9 @@ export interface operations {
             path: {
                 entry_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5288,7 +5489,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -5328,7 +5531,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5362,7 +5567,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5396,7 +5603,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5428,7 +5637,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5457,7 +5668,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5470,6 +5683,15 @@ export interface operations {
                     "application/json": components["schemas"]["ReconcileOut"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     gl_rebuild_api_gl_rebuild_post: {
@@ -5477,7 +5699,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5490,6 +5714,15 @@ export interface operations {
                     "application/json": components["schemas"]["GLRebuildOut"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_overview_api_stats_overview_get: {
@@ -5497,7 +5730,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5508,6 +5743,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalesPurchaseOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5524,7 +5768,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5572,7 +5818,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5612,7 +5860,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5654,7 +5904,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5694,7 +5946,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5734,7 +5988,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5782,7 +6038,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5826,7 +6084,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {

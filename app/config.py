@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # 콤마로 여러 origin 지정 가능
     cors_origins: str = "http://localhost:3000"
 
+    # 인증 세션 쿠키(httpOnly) — Next 앱은 이 쿠키로 인증한다(토큰을 JS/localStorage에
+    # 두지 않아 XSS 탈취면을 제거). same-origin 프록시(next rewrites)라 samesite=lax 로
+    # 충분하다. HTTPS 배포 시 COOKIE_SECURE=true 로 Secure 플래그를 켠다.
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"   # lax / strict / none
+
     @model_validator(mode="after")
     def _guard_jwt_secret(self):
         # 기본/약한/자리표시자 시크릿으로는 조용히 기동하지 않는다(토큰 위조 위험).

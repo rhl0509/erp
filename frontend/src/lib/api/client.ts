@@ -1,36 +1,27 @@
 /**
  * 타입 안전 API 클라이언트 — openapi-fetch + 생성된 schema.d.ts.
  *
- * 레거시 index.html 의 api() 헬퍼 패리티:
- *  - localStorage("erp_token") 에서 Bearer 토큰 주입 (레거시와 같은 키 → 공존 기간 단일 로그인)
- *  - 401 응답 → 토큰 제거 + /login 리다이렉트 (로그인 요청 자체는 예외)
- *  - 오류는 서버 {detail, code, request_id, fields?} 를 ApiRequestError 로 표면화
- *  - form-encoded 로그인 헬퍼(loginRequest) — JSON 으로 보내면 422 나는 함정을 여기 1곳에 캡슐화
- *  - blob 다운로드 헬퍼(downloadFile) — 엑셀 export 용 골격(슬라이스 6에서 사용)
+ * 인증: httpOnly 세션 쿠키(erp_session). 로그인 시 서버가 쿠키를 심고, 이후 모든
+ * 요청은 same-origin(next rewrites 로 /api → FastAPI) 이라 브라우저가 쿠키를 자동
+ * 전송한다. 토큰을 JS/localStorage 에 두지 않아 XSS 토큰 탈취면이 없다.
+ *  - 401 응답 → 강제 로그아웃(쿠키 삭제 + /login). 단 로그인·me 프로브는 예외.
+ *  - 오류는 서버 {detail, code, request_id, fields?} 를 ApiRequestError 로 표면화.
+ *  - form-encoded 로그인 헬퍼(loginRequest).
+ *  - blob 다운로드 헬퍼(downloadFile) — 쿠키가 자동 전송되므로 헤더 주입 불필요.
  */
 import createClient from "openapi-fetch";
 
 import type { paths } from "./schema";
 import { ApiRequestError, type ApiError } from "./errors";
 
-/** 레거시 index.html 의 TOKEN_KEY 와 동일해야 한다(localStorage 공유 = 단일 로그인). */
-export const TOKEN_KEY = "erp_token";
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string | null): void {
-  if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
-}
-
-/** 토큰 제거 + 로그인 화면으로. 레거시 doLogout() 의 401 처리 패리티. */
+/** 세션 쿠키는 httpOnly 라 JS 로 읽거나 지울 수 없다. 로그아웃은 서버에 위임한다. */
 export function forceLogout(): void {
-  setToken(null);
-  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+  if (typeof window === "undefined") return;
+  // keepalive: 곧바로 이어질 내비게이션에도 요청이 완료되도록 한다.
+  void fetch("/api/auth/logout", { method: "POST", keepalive: true }).catch(
+    () => {},
+  );
+  if (window.location.pathname !== "/login") {
     // 하드 내비게이션: React Query 캐시 등 클라이언트 상태를 함께 초기화한다.
     window.location.assign("/login");
   }
@@ -40,18 +31,14 @@ export function forceLogout(): void {
 export const client = createClient<paths>({ baseUrl: "" });
 
 client.use({
-  onRequest({ request }) {
-    const token = getToken();
-    if (token && !request.headers.has("Authorization")) {
-      request.headers.set("Authorization", `Bearer ${token}`);
-    }
-    return request;
-  },
   onResponse({ request, response }) {
-    // 401 → 강제 로그아웃. 단, 로그인 시도 자체의 401(잘못된 비밀번호)은 폼에서 처리한다.
+    // 401 → 강제 로그아웃. 단 (1)로그인 시도의 401(잘못된 비밀번호)은 폼에서 처리,
+    // (2)me 프로브의 401(비로그인)은 AuthProvider 가 null 로 해석 — 둘 다 제외.
+    const path = new URL(request.url).pathname;
     if (
       response.status === 401 &&
-      !new URL(request.url).pathname.endsWith("/api/auth/login")
+      !path.endsWith("/api/auth/login") &&
+      !path.endsWith("/api/auth/me")
     ) {
       forceLogout();
     }
@@ -78,36 +65,34 @@ export function unwrap<T>(result: {
 }
 
 /**
- * 로그인 — OAuth2 form-encoded(POST /api/auth/login). 성공 시 토큰을 저장하고 반환한다.
- * openapi-fetch 는 Content-Type 이 x-www-form-urlencoded 면 기본 serializer 가
- * URLSearchParams 로 직렬화한다(레거시 index.html 의 URLSearchParams 전송과 동일).
+ * 로그인 — OAuth2 form-encoded(POST /api/auth/login). 성공 시 서버가 httpOnly
+ * 세션 쿠키를 심는다(응답 본문의 access_token 은 헤더 방식 클라이언트용이라 무시).
  */
 export async function loginRequest(
   username: string,
   password: string,
-): Promise<string> {
+): Promise<void> {
   const result = await client.POST("/api/auth/login", {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: { username, password, scope: "" },
   });
-  const data = unwrap(result);
-  setToken(data.access_token);
-  return data.access_token;
+  unwrap(result); // 실패 시 throw
+}
+
+/** 로그아웃 — 서버가 세션 쿠키를 제거한다. */
+export async function logoutRequest(): Promise<void> {
+  await client.POST("/api/auth/logout");
 }
 
 /**
- * 파일 다운로드(엑셀 등) — <a href> 로는 Authorization 헤더를 못 실으므로
- * fetch → blob → objectURL 패턴(레거시 downloadFile 패리티). 실패 시 throw
- * (호출부에서 toast). 슬라이스 6(리포트 export)에서 사용할 골격.
+ * 파일 다운로드(엑셀 등) — <a href> 대신 fetch → blob → objectURL 패턴.
+ * same-origin 이라 세션 쿠키가 자동 전송되어 인증된다. 실패 시 throw(호출부 toast).
  */
 export async function downloadFile(
   path: string,
   filename: string,
 ): Promise<void> {
-  const token = getToken();
-  const res = await fetch(path, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const res = await fetch(path);
   if (!res.ok) {
     let body: Partial<ApiError> | null = null;
     try {

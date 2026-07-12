@@ -10,7 +10,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
-import { client, getToken, setToken, unwrap } from "@/lib/api/client";
+import { client, logoutRequest, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 
 export type Me = components["schemas"]["MeOut"];
@@ -31,8 +31,10 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function fetchMe(): Promise<Me | null> {
-  if (!getToken()) return null; // 토큰 없음 = 비로그인 (요청 자체를 생략)
-  return unwrap(await client.GET("/api/auth/me"));
+  // 세션 쿠키(httpOnly)로 인증 — 쿠키 없으면 서버가 401 → 비로그인(null)으로 해석.
+  const res = await client.GET("/api/auth/me");
+  if (res.response.status === 401) return null;
+  return unwrap(res);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -55,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
-    setToken(null);
+    void logoutRequest(); // 서버가 세션 쿠키 삭제(httpOnly라 JS로는 못 지움)
     queryClient.clear(); // 사용자별 서버 상태 캐시 제거
     router.replace("/login");
   }, [queryClient, router]);

@@ -30,6 +30,9 @@ def client():
 
 @pytest.fixture()
 def admin(client):
-    """admin 인증 헤더."""
+    """admin 인증 헤더. 로그인이 심는 세션 쿠키는 비워, 이 픽스처를 쓰는 테스트가
+    '헤더 인증'만 검사하도록 유지한다(쿠키 인증은 별도 테스트에서 명시적으로 확인)."""
     r = client.post("/api/auth/login", data={"username": "admin", "password": "admin1234"})
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    token = r.json()["access_token"]
+    client.cookies.clear()
+    return {"Authorization": f"Bearer {token}"}
