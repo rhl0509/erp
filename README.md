@@ -9,10 +9,12 @@ ERP 공통 기반 + 거래처/품목 마스터 백엔드 (FastAPI + SQLAlchemy +
 - 채번 서비스 (행 잠금으로 동시성 안전)
 - 감사 로그 (생성/수정/삭제 이력 + 변경 전후 값)
 - 거래처(Partner) / 품목(Item) 마스터 CRUD
-- 재고: 입출고 이력 + 품목별 현재고(잔고 캐시) + 안전재고 미달 알림
-- 거래 문서: 발주(구매)·수주(판매) — 명세 + 상태전이(확정/부분입출고/완료/취소) + 재고 자동 연동
-- 원가·손익: 이동평균 원가 + 재고평가액 + 매출총이익(COGS)
-- 회계: 결제/수금(AP·AR) 기록 + 거래처 미지급·미수 잔액
+- 재고: 입출고 이력 + **창고별** 현재고(잔고 캐시) + 안전재고 미달 알림 + 창고간 이전
+- 거래 문서: 발주(구매)·수주(판매) — 명세 + 상태전이(확정/부분입출고/완료/취소) + 재고 자동 연동 + 반품
+- 원가·손익: 이동평균 원가(품목+창고) + 재고평가액 + 매출총이익(COGS)
+- 부가세: 공급가/세액 분리 + 세금계산서 발행·취소
+- 회계: 결제/수금(AP·AR) 기록 + 거래처 미지급·미수 잔액 + 여신한도
+- 총계정원장(GL): 복식부기 자동 전기 — 분개장·계정별원장·시산표·간이 손익/재무상태표 + 재대사·재전기
 - 목록 API 페이지네이션(`items/total/page/page_size/pages`) + 검색·유형 필터
 - 일관된 오류 응답(`{detail, code, fields}`) — 입력값 오류 시 필드별 한글 메시지
 
@@ -88,7 +90,7 @@ CORS_ORIGINS=http://localhost:3000
 python -m app.seed
 ```
 
-→ 권한(16종), 역할(`admin` + `manager`/`staff`/`warehouse`/`viewer`), 관리자 계정(`admin` / `admin1234`), 샘플 거래처·품목이 생성됩니다.
+→ 권한(18종), 역할(`admin` + `manager`/`staff`/`warehouse`/`viewer`), 관리자 계정(`admin` / `admin1234`), 샘플 거래처·품목, 계정과목(12종)이 생성됩니다.
 
 ## 5. 서버 실행
 
@@ -179,30 +181,36 @@ curl http://localhost:8000/api/partners -H "Authorization: Bearer %TOKEN%"
 
 ```
 erp/
-├─ app/
+├─ app/                 백엔드 (API 전용)
 │  ├─ config.py        설정 (.env)
 │  ├─ database.py      엔진/세션/Base/get_db
-│  ├─ security.py      비밀번호 해시 + JWT
-│  ├─ models.py        ORM 모델 (RBAC, 감사, 채번, 마스터)
+│  ├─ security.py      비밀번호 해시 + JWT (httpOnly 세션 쿠키)
+│  ├─ models.py        ORM 모델 (RBAC, 감사, 채번, 마스터, 문서, 재고, 결제, 세금계산서, GL)
 │  ├─ schemas.py       Pydantic 스키마 (+ Page 페이지네이션, ErrorOut)
-│  ├─ services.py      채번 + 감사 로그 + 페이지네이션 헬퍼
+│  ├─ services.py      채번 + 감사 로그 + 재고/원가(post_movement·apply_stock_delta) + 부가세
+│  ├─ gl.py            총계정원장 전기 서비스 (분개 생성·차대 검증·재전기)
 │  ├─ deps.py          현재 사용자 / 권한 검사 의존성
-│  ├─ seed.py          초기 데이터 시드
-│  ├─ main.py          앱 팩토리 + 라우터 + 오류 핸들러 + UI 서빙
-│  ├─ static\
-│  │  └─ index.html    웹 관리 콘솔(단일 파일, 빌드 불필요)
+│  ├─ seed.py          초기 데이터 시드 (권한·역할·계정과목)
+│  ├─ main.py          앱 팩토리 + 라우터 + 오류 핸들러
 │  └─ api\
 │     ├─ auth.py       로그인 / 내 정보(권한 포함)
 │     ├─ users.py      사용자·역할 관리
-│     ├─ partners.py   거래처 CRUD (+ 매입/매출 내역)
+│     ├─ partners.py   거래처 CRUD (+ 매입/매출 내역, 미수·미지급 잔액)
 │     ├─ items.py      품목 CRUD
 │     ├─ stock.py      입출고 + 현재고/안전재고 알림
-│     ├─ purchase.py   발주(구매) 문서 + 입고
-│     ├─ sales.py      수주(판매) 문서 + 출고
+│     ├─ warehouses.py 창고 CRUD + 창고간 이전
+│     ├─ purchase.py   발주(구매) 문서 + 입고 + 반품
+│     ├─ sales.py      수주(판매) 문서 + 출고 + 반품 (여신한도 체크)
 │     ├─ costing.py    재고평가·매출총이익(이동평균 원가)
-│     ├─ payments.py   결제/수금(AR/AP) + 거래처 잔액
+│     ├─ payments.py   결제/수금(AR/AP)
+│     ├─ invoices.py   세금계산서 발행·취소
+│     ├─ gl.py         분개장·계정별원장·시산표·손익·재무상태·재대사·수기전표·재전기
 │     └─ stats.py / reports.py / audit.py   통계·엑셀 리포트·감사 로그
-├─ migrations/         Alembic 마이그레이션 (env.py + versions/)
+├─ frontend/           웹 관리 콘솔 (Next.js App Router) ← 실제 화면
+├─ migrations/         Alembic 마이그레이션 (env.py + versions/ 13개)
+├─ scripts/            rebuild_gl.py (GL 전량 재전기)
+├─ tests/              pytest (test_api / test_gl / test_warehouse / test_concurrency)
+├─ docs/               gl-design.md (GL 설계·구현 결과) · nextjs-migration-plan.md
 ├─ alembic.ini
 ├─ requirements.txt
 ├─ .env.example
@@ -221,7 +229,8 @@ erp/
 | `stock:read` / `stock:write` | 재고 조회 / 입출고 등록·삭제 |
 | `purchase:read` / `purchase:write` | 발주 조회 / 등록·확정·입고·취소 |
 | `sales:read` / `sales:write` | 수주 조회 / 등록·확정·출고·취소 |
-| `payment:read` / `payment:write` | 결제/수금·잔액 조회 / 등록·삭제 |
+| `payment:read` / `payment:write` | 결제/수금·잔액 조회 / 등록·삭제 (**총계정원장 조회/기표도 이 권한**) |
+| `invoice:read` / `invoice:write` | 세금계산서 조회 / 발행·취소 |
 
 ## 응답 형식 (클라이언트 연동용)
 
@@ -265,7 +274,8 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-임시 SQLite로 매 테스트마다 스키마를 초기화·시드하며, 인증/권한(RBAC)·부분수정·재고 잔고·발주/수주 문서 흐름·이동평균 원가를 검증합니다.
+임시 SQLite로 매 테스트마다 스키마를 초기화·시드하며, 인증/권한(RBAC)·부분수정·재고 잔고·발주/수주 문서 흐름·
+이동평균 원가·부가세/세금계산서·반품·다중창고·총계정원장 전기/재대사·동시성을 검증합니다(총 77개).
 `.github/workflows/ci.yml` 로 push/PR 마다 GitHub Actions에서 자동 실행됩니다.
 
 ## 자주 막히는 부분 (Windows)

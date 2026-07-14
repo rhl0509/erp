@@ -1,7 +1,9 @@
 # 총계정원장(General Ledger) 설계 문서
 
-작성일: 2026-07-11 · 대상: D:\erp (FastAPI + SQLAlchemy 2.0 + MySQL / Next.js App Router)
-상태: **설계안 — 오픈 결정(§9) 확정 전 구현 착수 금지**
+작성일: 2026-07-11 · 최종 갱신: 2026-07-14 · 대상: D:\erp (FastAPI + SQLAlchemy 2.0 + MySQL / Next.js App Router)
+상태: **구현 완료 (S1~S6)** — §9 오픈 결정은 권장안대로 확정·반영됨.
+커밋: `6d9629a`(S1~S4 백엔드) · `253a558`(S5 프론트) · `9f04deb`(S6 수기전표·재무제표).
+설계와 실제 구현이 갈린 지점은 **§10 구현 결과** 참조. 이 문서는 이제 설계 기록이며, 최신 사실의 출처는 코드다.
 
 ---
 
@@ -277,4 +279,31 @@ journal_lines (분개 라인)
 | 7 | 현금 계정 분리 | **1110 단일로 시작** | Payment.method(계좌이체/현금/카드)별 계정 분리는 언제든 후속 가능(전표 재생성으로 소급도 가능). 지금 나누면 계정만 늘고 활용처가 없다 |
 
 ---
-근거 파일: `app/services.py`(compute_tax:17-24, apply_stock_delta:183-215, post_movement:224-278, post_return:281-331, post_transfer:334-392, 채번:101-138) · `app/models.py`(StockMovement:160-190, StockBalance:194-213, TaxInvoice:286-312, Payment:331-349) · `app/api/partners.py:191-233` · `app/api/reports.py:23-98` · `app/api/costing.py:14-24, 93-122` · `app/api/invoices.py:89-97` · `app/api/stock.py:177-225` · `app/api/payments.py:56-158` · `app/api/sales.py:239-260` · `migrations/versions/`
+
+## 10. 구현 결과 (2026-07-14 기준, 코드 대조)
+
+S1~S6 전부 구현·커밋 완료. 마이그레이션 `b3f2a1c0d9e8_general_ledger`(현 단일 head), 전기 서비스 `app/gl.py`,
+조회/전기 API `app/api/gl.py`, 재전기 스크립트 `scripts/rebuild_gl.py`, 프론트 `frontend/src/app/(app)/gl`,
+테스트 `tests/test_gl.py`(28건).
+
+### 설계와 다르게 구현된 지점 (의도된 편차 — 코드가 정답)
+
+| 항목 | 설계(위 본문) | 실제 구현 |
+|---|---|---|
+| `JournalEntry.status` | "status 컬럼은 두지 않는다"(§5) | `status` 컬럼 존재(`app/models.py:364`, default `posted`). 항상 posted 단일값이라 동작 차이는 없음 |
+| GL 권한 | `gl:read` 권한 신설(§8 S4) | 신설하지 않고 `payment:read` / `payment:write` 재사용(`app/api/gl.py`). 회계 권한 묶음 유지 |
+| 프론트 라우트 | `(app)/gl/journal`·`/ledger`·`/trial-balance` 개별 페이지(§8 S5) | 단일 `(app)/gl` 페이지 + 5탭(시산표·분개장·계정별원장·손익·재무상태) + 수기전표 모달 |
+| 재전기 진입점 | `scripts/rebuild_gl.py`만(§6) | 스크립트 + `POST /api/gl/rebuild` API 병행 |
+| 재무제표 | "(선택) 간이 손익"(§7) | `GET /api/gl/income-statement` + `GET /api/gl/balance-sheet` 둘 다 구현. 재무상태표는 마감 미구현이라 당기순이익을 **미마감**으로 별도 표시 |
+
+### 미구현 (설계가 범위 밖으로 선언한 것 — 후속 과제)
+
+- **기간 마감(period close)·마감분개·이월**: 마감 테이블도, 마감 후 소급 기표를 막는 코드도 없다.
+  현재 수기 전표(`POST /api/gl/manual`)는 **과거 날짜로 제한 없이 기입 가능**하다. 가장 시급한 후속 항목.
+- §9-4 원천 물리삭제 → 취소 플래그 + 역분개 전환 (현행은 전표 동반 삭제).
+- §9-5 세금계산서(주문 전량 스냅샷) vs GL 부가세(납품 기준) 금액 갭 — 어느 쪽으로 닫을지 미결정.
+- §9-7 `Payment.method`별 현금 계정 분리 (현재 1110 단일. 전표 재생성으로 소급 가능).
+- 다통화, 부문/프로젝트 회계, 고정자산·감가상각, 계정과목 편집 UI.
+
+---
+근거 파일: `app/services.py`(compute_tax:17-24, apply_stock_delta:183-215, post_movement:224-278, post_return:281-331, post_transfer:334-392, 채번:101-138) · `app/models.py`(StockMovement:160-190, StockBalance:194-213, TaxInvoice:286-312, Payment:331-349) · `app/gl.py` · `app/api/gl.py` · `app/api/partners.py:191-233` · `app/api/reports.py:23-98` · `app/api/costing.py:14-24, 93-122` · `app/api/invoices.py:89-97` · `app/api/stock.py:177-225` · `app/api/payments.py:56-158` · `app/api/sales.py:239-260` · `migrations/versions/`
