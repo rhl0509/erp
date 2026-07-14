@@ -9,7 +9,7 @@ import {
 import { useForm } from "react-hook-form";
 
 import Button from "@/components/ui/Button";
-import ConfirmModal from "@/components/ui/ConfirmModal";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import DataTable, { Pager, type Column } from "@/components/ui/DataTable";
 import Field, { SelectField } from "@/components/ui/Field";
 import Modal, { FormFull, FormGrid } from "@/components/ui/Modal";
@@ -44,11 +44,12 @@ const STATUS_LABEL: Record<string, string> = {
  *
  * 변경 성공 시 ["users"] invalidate — 목록과 TopNav 승인 대기 배지
  * (["users","pending","count"])가 함께 갱신된다.
- * 확인이 필요한 동작은 window.confirm 이 아니라 앱 내 ConfirmModal 을 쓴다.
+ * 확인이 필요한 동작은 window.confirm 이 아니라 앱 내 확인 모달(useConfirm)을 쓴다.
  */
 export default function UsersPage() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const canWrite = can("user:write");
 
@@ -59,10 +60,8 @@ export default function UsersPage() {
   /** 승인(pending) 또는 역할 변경(active) 모달 대상 */
   const [roleTarget, setRoleTarget] = useState<UserRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [deactivateTarget, setDeactivateTarget] = useState<UserRow | null>(null);
   const [rejectTarget, setRejectTarget] = useState<UserRow | null>(null);
   const [tempPwTarget, setTempPwTarget] = useState<UserRow | null>(null);
-  const [totpTarget, setTotpTarget] = useState<UserRow | null>(null);
 
   const list = useQuery({
     queryKey: ["users", "list", { page, status }],
@@ -88,6 +87,18 @@ export default function UsersPage() {
 
   // 비활성화 = 로그인 차단 + 발급된 세션 즉시 무효화(서버 token_version)
   const deactivateUser = async (u: UserRow) => {
+    const ok = await confirm({
+      title: "계정 비활성화",
+      message: (
+        <>
+          <b>{u.username}</b> 계정을 비활성화할까요? 해당 사용자는 로그인할 수 없게 되고,
+          <b> 이미 로그인된 세션도 즉시 종료</b>됩니다.
+        </>
+      ),
+      confirmText: "비활성화",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.PUT("/api/users/{user_id}", {
@@ -96,7 +107,6 @@ export default function UsersPage() {
         }),
       );
       toast("비활성화했습니다. 해당 사용자의 기존 세션도 종료됩니다.");
-      setDeactivateTarget(null);
       invalidateUsers();
     } catch (err) {
       toast(errorMessage(err), true);
@@ -104,6 +114,17 @@ export default function UsersPage() {
   };
 
   const disableTotp = async (u: UserRow) => {
+    const ok = await confirm({
+      title: "2단계 인증 해제",
+      message: (
+        <>
+          <b>{u.username}</b> 계정의 2단계 인증을 해제할까요? 인증 앱을 분실해 로그인하지
+          못하는 사용자를 구제하는 용도입니다. 해제 후에는 비밀번호만으로 로그인합니다.
+        </>
+      ),
+      confirmText: "해제",
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.POST("/api/users/{user_id}/2fa/disable", {
@@ -111,7 +132,6 @@ export default function UsersPage() {
         }),
       );
       toast("2단계 인증을 해제했습니다.");
-      setTotpTarget(null);
       invalidateUsers();
     } catch (err) {
       toast(errorMessage(err), true);
@@ -269,7 +289,7 @@ export default function UsersPage() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setTotpTarget(u);
+                        void disableTotp(u);
                       }}
                     >
                       2FA 해제
@@ -280,7 +300,7 @@ export default function UsersPage() {
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setDeactivateTarget(u);
+                      void deactivateUser(u);
                     }}
                   >
                     비활성
@@ -325,38 +345,6 @@ export default function UsersPage() {
             setFormOpen(false);
             invalidateUsers();
           }}
-        />
-      )}
-
-      {deactivateTarget && (
-        <ConfirmModal
-          title="계정 비활성화"
-          danger
-          confirmText="비활성화"
-          message={
-            <>
-              <b>{deactivateTarget.username}</b> 계정을 비활성화할까요? 해당 사용자는
-              로그인할 수 없게 되고, <b>이미 로그인된 세션도 즉시 종료</b>됩니다.
-            </>
-          }
-          onConfirm={() => deactivateUser(deactivateTarget)}
-          onClose={() => setDeactivateTarget(null)}
-        />
-      )}
-
-      {totpTarget && (
-        <ConfirmModal
-          title="2단계 인증 해제"
-          confirmText="해제"
-          message={
-            <>
-              <b>{totpTarget.username}</b> 계정의 2단계 인증을 해제할까요? 인증 앱을
-              분실해 로그인하지 못하는 사용자를 구제하는 용도입니다. 해제 후에는 비밀번호만으로
-              로그인합니다.
-            </>
-          }
-          onConfirm={() => disableTotp(totpTarget)}
-          onClose={() => setTotpTarget(null)}
         />
       )}
 

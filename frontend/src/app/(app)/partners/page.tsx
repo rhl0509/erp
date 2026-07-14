@@ -15,6 +15,7 @@ import Modal, { FormFull, FormGrid } from "@/components/ui/Modal";
 import { Panel, Spacer, Toolbar } from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import Tag, { type TagVariant } from "@/components/ui/Tag";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { useToast } from "@/components/ui/Toast";
 import { client, downloadFile, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -61,6 +62,7 @@ function typeTag(partnerType: string) {
 export default function PartnersPage() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const canWrite = can("partner:write");
 
@@ -111,8 +113,17 @@ export default function PartnersPage() {
   };
 
   const removePartner = async (partner: Partner) => {
-    // 레거시 delPartner confirm 패리티
-    if (!window.confirm(`거래처 "${partner.name}" 을(를) 삭제할까요?`)) return;
+    const ok = await confirm({
+      title: "거래처 삭제",
+      message: (
+        <>
+          거래처 <b>{partner.name}</b> 을(를) 삭제할까요? 거래 이력이 있으면 삭제되지 않습니다.
+        </>
+      ),
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.DELETE("/api/partners/{partner_id}", {

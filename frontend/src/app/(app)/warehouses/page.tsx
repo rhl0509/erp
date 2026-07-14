@@ -14,6 +14,7 @@ import Field, { SelectField } from "@/components/ui/Field";
 import Modal, { FormGrid } from "@/components/ui/Modal";
 import { Panel, Spacer, Toolbar } from "@/components/ui/Panel";
 import Tag from "@/components/ui/Tag";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { useToast } from "@/components/ui/Toast";
 import { client, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -43,6 +44,7 @@ const ACTIVE_OPTIONS = [
 export default function WarehousesPage() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const canWrite = can("stock:write");
 
@@ -99,12 +101,17 @@ export default function WarehousesPage() {
 
   // 레거시 setDefaultWarehouse 패리티 — 지정만 가능(해제·불변식은 서버가 400 으로 검증)
   const setDefault = async (wh: Warehouse) => {
-    if (
-      !window.confirm(
-        `"${wh.name}" 창고를 기본창고로 지정할까요? 기존 기본창고는 일반 창고로 바뀝니다.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: "기본창고 지정",
+      message: (
+        <>
+          <b>{wh.name}</b> 창고를 기본창고로 지정할까요? 기존 기본창고는 일반 창고로 바뀝니다.
+          창고를 지정하지 않은 입출고는 기본창고로 처리됩니다.
+        </>
+      ),
+      confirmText: "지정",
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.PUT("/api/warehouses/{warehouse_id}", {

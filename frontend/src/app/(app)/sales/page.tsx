@@ -25,6 +25,7 @@ import DataTable, { Pager, type Column } from "@/components/ui/DataTable";
 import Field, { SelectField } from "@/components/ui/Field";
 import Modal, { FormFull, FormGrid } from "@/components/ui/Modal";
 import { Panel, Spacer, Toolbar } from "@/components/ui/Panel";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { useToast } from "@/components/ui/Toast";
 import { client, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -88,6 +89,7 @@ const canIssueInvoice = (so: So) =>
 export default function SalesPage() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const canWrite = can("sales:write");
 
@@ -153,8 +155,18 @@ export default function SalesPage() {
   };
 
   const cancelSo = async (so: So) => {
-    // 레거시 cancelOrder confirm 패리티
-    if (!window.confirm("이 문서를 취소하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "수주 취소",
+      message: (
+        <>
+          수주 <b>{so.so_no}</b> 을(를) 취소할까요? 출고·수금 이력이 있으면 취소되지 않습니다.
+        </>
+      ),
+      confirmText: "취소 처리",
+      cancelText: "닫기",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.POST("/api/sales-orders/{so_id}/cancel", {
@@ -170,7 +182,17 @@ export default function SalesPage() {
   };
 
   const deleteSo = async (so: So) => {
-    if (!window.confirm("이 문서를 삭제하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "수주 삭제",
+      message: (
+        <>
+          수주 <b>{so.so_no}</b> 을(를) 삭제할까요? 되돌릴 수 없습니다.
+        </>
+      ),
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.DELETE("/api/sales-orders/{so_id}", {
@@ -459,6 +481,7 @@ function SoDetailModal({
 }) {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const router = useRouter();
   const canWrite = can("sales:write");
@@ -503,7 +526,17 @@ function SoDetailModal({
 
   // 레거시 issueInvoiceFromDoc 패리티(발행 후 모달을 닫는 대신 상세를 갱신)
   const issueInvoice = async (so: So) => {
-    if (!window.confirm("이 수주로 세금계산서를 발행할까요?")) return;
+    const ok = await confirm({
+      title: "세금계산서 발행",
+      message: (
+        <>
+          수주 <b>{so.so_no}</b> 로 세금계산서를 발행할까요? 발행 시점의 금액이 그대로
+          스냅샷으로 남습니다.
+        </>
+      ),
+      confirmText: "발행",
+    });
+    if (!ok) return;
     try {
       const inv = unwrap(
         await client.POST("/api/tax-invoices", {
@@ -519,8 +552,18 @@ function SoDetailModal({
   };
 
   const cancelInvoice = async (inv: TaxInvoice) => {
-    if (!window.confirm(`세금계산서 ${inv.invoice_no} 을(를) 취소할까요?`))
-      return;
+    const ok = await confirm({
+      title: "세금계산서 취소",
+      message: (
+        <>
+          세금계산서 <b>{inv.invoice_no}</b> 을(를) 취소할까요?
+        </>
+      ),
+      confirmText: "취소 처리",
+      cancelText: "닫기",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.POST("/api/tax-invoices/{inv_id}/cancel", {

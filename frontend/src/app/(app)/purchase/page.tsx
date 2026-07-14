@@ -25,6 +25,7 @@ import DataTable, { Pager, type Column } from "@/components/ui/DataTable";
 import Field, { SelectField } from "@/components/ui/Field";
 import Modal, { FormFull, FormGrid } from "@/components/ui/Modal";
 import { Panel, Spacer, Toolbar } from "@/components/ui/Panel";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { useToast } from "@/components/ui/Toast";
 import { client, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -86,6 +87,7 @@ const canIssueInvoice = (po: Po) =>
 export default function PurchasePage() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const canWrite = can("purchase:write");
 
@@ -151,8 +153,18 @@ export default function PurchasePage() {
   };
 
   const cancelPo = async (po: Po) => {
-    // 레거시 cancelOrder confirm 패리티
-    if (!window.confirm("이 문서를 취소하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "발주 취소",
+      message: (
+        <>
+          발주 <b>{po.po_no}</b> 을(를) 취소할까요? 입고·지급 이력이 있으면 취소되지 않습니다.
+        </>
+      ),
+      confirmText: "취소 처리",
+      cancelText: "닫기",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.POST("/api/purchase-orders/{po_id}/cancel", {
@@ -168,7 +180,17 @@ export default function PurchasePage() {
   };
 
   const deletePo = async (po: Po) => {
-    if (!window.confirm("이 문서를 삭제하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "발주 삭제",
+      message: (
+        <>
+          발주 <b>{po.po_no}</b> 을(를) 삭제할까요? 되돌릴 수 없습니다.
+        </>
+      ),
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.DELETE("/api/purchase-orders/{po_id}", {
@@ -456,6 +478,7 @@ function PoDetailModal({
 }) {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const router = useRouter();
   const canWrite = can("purchase:write");
@@ -500,7 +523,17 @@ function PoDetailModal({
 
   // 레거시 issueInvoiceFromDoc 패리티(발행 후 모달을 닫는 대신 상세를 갱신)
   const issueInvoice = async (po: Po) => {
-    if (!window.confirm("이 발주로 세금계산서를 발행할까요?")) return;
+    const ok = await confirm({
+      title: "세금계산서 발행",
+      message: (
+        <>
+          발주 <b>{po.po_no}</b> 로 세금계산서를 발행할까요? 발행 시점의 금액이 그대로
+          스냅샷으로 남습니다.
+        </>
+      ),
+      confirmText: "발행",
+    });
+    if (!ok) return;
     try {
       const inv = unwrap(
         await client.POST("/api/tax-invoices", {
@@ -516,8 +549,18 @@ function PoDetailModal({
   };
 
   const cancelInvoice = async (inv: TaxInvoice) => {
-    if (!window.confirm(`세금계산서 ${inv.invoice_no} 을(를) 취소할까요?`))
-      return;
+    const ok = await confirm({
+      title: "세금계산서 취소",
+      message: (
+        <>
+          세금계산서 <b>{inv.invoice_no}</b> 을(를) 취소할까요?
+        </>
+      ),
+      confirmText: "취소 처리",
+      cancelText: "닫기",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.POST("/api/tax-invoices/{inv_id}/cancel", {

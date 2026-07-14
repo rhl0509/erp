@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ApiRequestError } from "@/lib/api/errors";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
+import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export default function Providers({ children }: { children: ReactNode }) {
@@ -35,7 +36,9 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <ConfirmProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ConfirmProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

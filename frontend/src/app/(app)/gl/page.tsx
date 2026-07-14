@@ -13,6 +13,7 @@ import Modal from "@/components/ui/Modal";
 import { Panel, PanelHead, Spacer, Toolbar } from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import Tag, { type TagVariant } from "@/components/ui/Tag";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { useToast } from "@/components/ui/Toast";
 import { client, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -138,6 +139,7 @@ export default function GlPage() {
 function TrialBalanceView() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const canRebuild = can("payment:write");
   const [rebuilding, setRebuilding] = useState(false);
@@ -156,12 +158,18 @@ function TrialBalanceView() {
 
   // 전체 재전기(관리 액션) — 성공 시 GL 전체(시산표·재대사·분개장·원장) refetch
   const doRebuild = async () => {
-    if (
-      !window.confirm(
-        "GL 전표 전체를 삭제하고 원천(재고이동·결제)에서 다시 전기합니다. 계속하시겠습니까?",
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: "GL 전체 재전기",
+      message: (
+        <>
+          GL 전표 <b>전체</b>를 삭제하고 원천(재고이동·결제)에서 다시 전기합니다. 수기 전표는
+          보존되며, 재대사 검증에 실패하면 전체가 롤백됩니다. 계속할까요?
+        </>
+      ),
+      confirmText: "재전기",
+      danger: true,
+    });
+    if (!ok) return;
     setRebuilding(true);
     try {
       const res = unwrap(await client.POST("/api/gl/rebuild"));
@@ -533,6 +541,7 @@ function JournalEntryModal({
 }) {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState(false);
   const detail = useQuery({
@@ -551,7 +560,17 @@ function JournalEntryModal({
 
   const doDelete = async () => {
     if (!e) return;
-    if (!window.confirm(`수기 전표 ${e.entry_no} 을(를) 삭제할까요?`)) return;
+    const ok = await confirm({
+      title: "수기 전표 삭제",
+      message: (
+        <>
+          수기 전표 <b>{e.entry_no}</b> 을(를) 삭제할까요? 되돌릴 수 없습니다.
+        </>
+      ),
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       unwrap(

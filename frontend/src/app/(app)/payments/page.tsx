@@ -15,6 +15,7 @@ import Field, { SelectField } from "@/components/ui/Field";
 import Modal, { FormFull, FormGrid } from "@/components/ui/Modal";
 import { Panel, PanelHead, Spacer, Toolbar } from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { useToast } from "@/components/ui/Toast";
 import { client, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -85,6 +86,7 @@ export default function PaymentsPage() {
 function PaymentsContent() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -168,7 +170,17 @@ function PaymentsContent() {
   };
 
   const deletePayment = async (p: Payment) => {
-    if (!window.confirm("이 결제 내역을 삭제하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "결제 내역 삭제",
+      message: (
+        <>
+          이 결제 내역을 삭제할까요? 거래처 잔액과 연결된 회계 전표도 함께 되돌아갑니다.
+        </>
+      ),
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.DELETE("/api/payments/{payment_id}", {

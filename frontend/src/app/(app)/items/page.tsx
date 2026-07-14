@@ -14,6 +14,7 @@ import Field, { SelectField } from "@/components/ui/Field";
 import Modal, { FormGrid } from "@/components/ui/Modal";
 import { Panel, Spacer, Toolbar } from "@/components/ui/Panel";
 import Tag from "@/components/ui/Tag";
+import { useConfirm } from "@/components/ui/ConfirmProvider";
 import { useToast } from "@/components/ui/Toast";
 import { client, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -61,6 +62,7 @@ const ACTIVE_OPTIONS = [
 export default function ItemsPage() {
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const canWrite = can("item:write");
 
@@ -110,8 +112,18 @@ export default function ItemsPage() {
   };
 
   const removeItem = async (item: Item) => {
-    // 레거시 delItem confirm 패리티
-    if (!window.confirm(`품목 "${item.name}" 을(를) 삭제할까요?`)) return;
+    const ok = await confirm({
+      title: "품목 삭제",
+      message: (
+        <>
+          품목 <b>{item.name}</b> 을(를) 삭제할까요? 거래·재고 이력이 있으면 삭제 대신
+          비활성화해야 합니다.
+        </>
+      ),
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       unwrap(
         await client.DELETE("/api/items/{item_id}", {
