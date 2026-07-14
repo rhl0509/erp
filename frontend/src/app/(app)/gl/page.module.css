@@ -103,6 +103,17 @@
   padding: var(--s4) 0;
 }
 
+/* 기간 마감 안내(다음 마감 대상·차단 범위) */
+.note {
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: 1.6;
+}
+
 /* ===== S6: 수기 전표 등록 폼 ===== */
 /* 전표일자·적요 상단 메타 */
 .manualMeta {

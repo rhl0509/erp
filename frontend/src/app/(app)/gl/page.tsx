@@ -62,11 +62,12 @@ function typeTag(accountType: string) {
   );
 }
 
-/** 전표 출처 Tag — 백엔드 source_type(MOVEMENT/PAYMENT/MANUAL) */
+/** 전표 출처 Tag — 백엔드 source_type(MOVEMENT/PAYMENT/MANUAL/CLOSING) */
 const SOURCE_TAG: Record<string, [TagVariant, string]> = {
   MOVEMENT: ["supp", "재고이동"],
   PAYMENT: ["cust", "결제"],
   MANUAL: ["gray", "수동"],
+  CLOSING: ["both", "기간마감"],
 };
 
 function sourceTag(sourceType: string) {
@@ -81,7 +82,7 @@ function sourceTag(sourceType: string) {
 /** 계정 셀렉트 라벨 — "1130 상품" */
 const accountLabel = (r: TrialBalanceRow) => `${r.account_code} ${r.account_name}`;
 
-type GlTab = "trial" | "journal" | "ledger" | "income" | "balance";
+type GlTab = "trial" | "journal" | "ledger" | "income" | "balance" | "periods";
 
 const TABS: [GlTab, string][] = [
   ["trial", "시산표"],
@@ -89,12 +90,14 @@ const TABS: [GlTab, string][] = [
   ["ledger", "계정별원장"],
   ["income", "손익계산서"],
   ["balance", "재무상태표"],
+  ["periods", "기간 마감"],
 ];
 
 /**
- * 총계정원장(GL, 슬라이스 5) — 복식부기 전표 조회 3뷰를 탭으로 묶는다:
- * 시산표(+재대사 상태·재전기), 분개장(전표 목록·상세 모달), 계정별원장(러닝밸런스).
- * 조회는 payment:read(nav 게이팅과 동일), 재전기 버튼만 payment:write.
+ * 총계정원장(GL) — 복식부기 전표 조회 뷰를 탭으로 묶는다:
+ * 시산표(+재대사 상태·재전기), 분개장(전표 목록·상세 모달), 계정별원장(러닝밸런스),
+ * 간이 손익계산서·재무상태표, 기간 마감(월 마감·해제).
+ * 조회는 payment:read(nav 게이팅과 동일), 재전기·마감은 payment:write.
  */
 export default function GlPage() {
   const [tab, setTab] = useState<GlTab>("trial");
@@ -105,7 +108,7 @@ export default function GlPage() {
         <div>
           <h2 className={styles.title}>총계정원장</h2>
           <p className={styles.subtitle}>
-            복식부기 전표(GL) — 시산표 · 분개장 · 계정별원장 · 손익계산서 · 재무상태표
+            복식부기 전표(GL) — 시산표 · 분개장 · 계정별원장 · 손익계산서 · 재무상태표 · 기간 마감
           </p>
         </div>
       </div>
@@ -130,7 +133,174 @@ export default function GlPage() {
       {tab === "ledger" && <LedgerView />}
       {tab === "income" && <IncomeStatementView />}
       {tab === "balance" && <BalanceSheetView />}
+      {tab === "periods" && <PeriodsView />}
     </section>
+  );
+}
+
+// ==================== 기간 마감 ====================
+
+type PeriodRow = components["schemas"]["PeriodOut"];
+
+/**
+ * 월별 회계기간 마감. 마감하면 그 달 **이하**의 모든 기간이 얼어붙는다 —
+ * 수기 전표·과거 날짜 결제·원천 삭제가 전부 서버에서 400(period_closed)으로 막힌다.
+ * 마감 시 손익계정은 3110 이월이익잉여금으로 대체된다(CLOSING 전표).
+ *
+ * 진행 중인 이번 달은 마감할 수 없다(서버 규칙) — 마감하면 그 달의 남은 영업이 막힌다.
+ * 해제는 최근 마감분부터 역순으로만 가능하다.
+ */
+function PeriodsView() {
+  const { can } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const queryClient = useQueryClient();
+  const canClose = can("payment:write");
+  const [busy, setBusy] = useState(false);
+
+  const periods = useQuery({
+    queryKey: ["gl", "periods"],
+    queryFn: async () => unwrap(await client.GET("/api/gl/periods")),
+    placeholderData: keepPreviousData,
+  });
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["gl"] });
+
+  const doClose = async (p: PeriodRow) => {
+    const ok = await confirm({
+      title: `${p.period} 기간 마감`,
+      message: (
+        <>
+          <b>{p.period}</b> 을(를) 마감할까요? 당기순이익 <b>{amt(p.net_income)}원</b>이
+          이월이익잉여금(3110)으로 대체되고, <b>{p.period} 이전의 모든 기간이 얼어붙습니다</b> —
+          그 기간에는 수기 전표·과거 날짜 결제·원천 삭제가 더 이상 불가능합니다.
+          되돌리려면 마감 해제를 하면 됩니다.
+        </>
+      ),
+      confirmText: "마감",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = unwrap(
+        await client.POST("/api/gl/periods/{period}/close", {
+          params: { path: { period: p.period } },
+        }),
+      );
+      toast(
+        res.closing_entry_no
+          ? `${p.period} 마감 완료 — 마감 전표 ${res.closing_entry_no}`
+          : `${p.period} 마감 완료 (손익 활동 없음)`,
+      );
+      refresh();
+    } catch (err) {
+      toast(errorMessage(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doReopen = async (p: PeriodRow) => {
+    const ok = await confirm({
+      title: `${p.period} 마감 해제`,
+      message: (
+        <>
+          <b>{p.period}</b> 의 마감을 해제할까요? 마감 전표({p.closing_entry_no || "없음"})가
+          삭제되고 손익이 손익계정으로 되돌아옵니다. 수정을 마치면 <b>다시 마감해야</b>
+          재무상태표의 이월이익잉여금이 맞습니다. (해제 이력은 감사 로그에 남습니다.)
+        </>
+      ),
+      confirmText: "마감 해제",
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      unwrap(
+        await client.POST("/api/gl/periods/{period}/reopen", {
+          params: { path: { period: p.period } },
+        }),
+      );
+      toast(`${p.period} 마감을 해제했습니다.`);
+      refresh();
+    } catch (err) {
+      toast(errorMessage(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const data = periods.data;
+  const rows = data?.periods ?? [];
+  // 해제는 최근 마감분부터 역순으로만 — 마지막으로 마감된 기간만 버튼을 노출한다.
+  const lastClosed = [...rows].reverse().find((p) => p.status === "closed")?.period ?? "";
+
+  const columns: Column<PeriodRow>[] = [
+    { key: "period", header: "회계기간", code: true },
+    {
+      key: "status",
+      header: "상태",
+      render: (p) =>
+        p.status === "closed" ? <Tag variant="both">마감</Tag> : <Tag variant="gray">열림</Tag>,
+    },
+    {
+      key: "net_income",
+      header: "당기순이익",
+      num: true,
+      render: (p) => amt(p.net_income),
+    },
+    {
+      key: "closing_entry_no",
+      header: "마감 전표",
+      code: true,
+      render: (p) => p.closing_entry_no || "-",
+    },
+    {
+      key: "closed_at",
+      header: "마감일시",
+      render: (p) =>
+        p.closed_at
+          ? `${new Date(p.closed_at).toLocaleString("ko-KR")}${p.closed_by ? ` · ${p.closed_by}` : ""}`
+          : "-",
+    },
+  ];
+
+  return (
+    <Panel>
+      <PanelHead title="기간 마감" />
+      <div className={styles.note}>
+        {data?.next_closable
+          ? `다음 마감 대상: ${data.next_closable} — 오래된 달부터 순서대로만 마감할 수 있습니다. 마감하면 그 달 이하의 기간이 얼어붙습니다(소급 기표 차단).`
+          : "마감할 수 있는 지난 기간이 없습니다. 진행 중인 이번 달은 마감할 수 없습니다(그 달의 남은 영업이 막히므로)."}
+      </div>
+
+      <DataTable
+        columns={columns}
+        rows={periods.isError ? [] : rows}
+        rowKey={(p) => p.period}
+        loading={periods.isPending}
+        emptyText={periods.isError ? errorMessage(periods.error) : "회계기간이 없습니다."}
+        actions={(p) => (
+          <>
+            {canClose && p.status !== "closed" && p.period === data?.next_closable && (
+              <Button size="sm" disabled={busy} onClick={() => void doClose(p)}>
+                마감
+              </Button>
+            )}
+            {canClose && p.status === "closed" && p.period === lastClosed && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void doReopen(p)}
+              >
+                마감 해제
+              </Button>
+            )}
+          </>
+        )}
+      />
+    </Panel>
   );
 }
 

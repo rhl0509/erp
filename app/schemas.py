@@ -1,5 +1,6 @@
 import re
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
@@ -837,25 +838,29 @@ class GLRebuildOut(BaseModel):
 
 # ---------- S6: 수기 전표(MANUAL) / 간이 재무제표 ----------
 class ManualLineIn(BaseModel):
-    """수기 전표 1라인. debit·credit 중 하나만 양수(0원 라인은 서버가 제거)."""
+    """수기 전표 1라인. debit·credit 중 하나만 양수(0원 라인은 서버가 제거).
+
+    금액은 Decimal 이다 — float 로 받으면 0.1+0.2 != 0.3 같은 이진 오차가 그대로
+    Decimal 로 실려 차대 검증이 정상 입력을 오탐하거나, 검증한 값과 DB(NUMERIC(18,4))에
+    저장되는 값이 달라진다."""
     account_code: str = Field(..., description="계정코드 (예: 3110)")
-    debit: float = Field(0, ge=0)
-    credit: float = Field(0, ge=0)
+    debit: Decimal = Field(Decimal("0"), ge=0, max_digits=18, decimal_places=4)
+    credit: Decimal = Field(Decimal("0"), ge=0, max_digits=18, decimal_places=4)
     partner_id: int | None = None
     memo: str = ""
 
 
 class ManualEntryIn(BaseModel):
-    """수기 전표 입력(기초잔액·마감·수정 분개). Σ차변 == Σ대변 이어야 한다."""
-    entry_date: str = Field(..., description="YYYY-MM-DD")
+    """수기 전표 입력(기초잔액·수정 분개). Σ차변 == Σ대변 이어야 한다."""
+    entry_date: date = Field(..., description="YYYY-MM-DD")
     description: str = ""
     lines: list[ManualLineIn] = Field(..., min_length=2)
 
     @model_validator(mode="after")
     def _check_balanced(self):
-        td = sum(l.debit for l in self.lines)
-        tc = sum(l.credit for l in self.lines)
-        if round(td, 4) != round(tc, 4):
+        td = sum((l.debit for l in self.lines), Decimal("0"))
+        tc = sum((l.credit for l in self.lines), Decimal("0"))
+        if td != tc:
             raise ValueError(f"차대 불일치: 차변 {td} != 대변 {tc}")
         if td == 0:
             raise ValueError("전표 금액이 0 입니다")
@@ -884,15 +889,42 @@ class IncomeStatementOut(BaseModel):
 
 
 class BalanceSheetOut(BaseModel):
-    """간이 재무상태표(§7): 자산 = 부채 + 자본 + 당기순이익(미마감). date_to 시점 누계.
-    마감 분개를 두지 않으므로 당기순이익은 손익계정에 남아 자본 아래 별도 표시한다."""
+    """간이 재무상태표(§7): 자산 = 부채 + 자본 + 당기순이익(미마감분). date_to 시점 누계.
+
+    마감된 기간의 손익은 마감 대체분개로 3110 이월이익잉여금(자본)에 이미 넘어가 있다.
+    따라서 net_income 에는 **아직 마감하지 않은 기간의 손익만** 남는다(전부 마감했다면 0)."""
     date_to: str | None = None
     assets: list[FinancialRow] = []
     liabilities: list[FinancialRow] = []
     equity: list[FinancialRow] = []
     total_assets: float
     total_liabilities: float
-    total_equity: float        # 자본계정 합(당기순이익 제외)
-    net_income: float          # 손익계정 누계(수익 − 비용)
-    total_liabilities_and_equity: float   # 부채 + 자본 + 당기순이익
+    total_equity: float        # 자본계정 합(마감된 기간의 이익 포함)
+    net_income: float          # 미마감 손익계정 누계(수익 − 비용)
+    total_liabilities_and_equity: float   # 부채 + 자본 + 미마감 당기순이익
     balanced: bool             # 자산 == 부채+자본+당기순이익
+
+
+# ---------- 기간 마감 (period close) ----------
+class PeriodOut(BaseModel):
+    """회계기간 1건. net_income 은 그 달의 손익(마감 전표 제외)이라 마감 후에도 그대로다."""
+    period: str                      # YYYY-MM
+    status: str                      # open / closed
+    net_income: float
+    closed_at: datetime | None = None
+    closed_by: str = ""
+    closing_entry_id: int | None = None
+    closing_entry_no: str = ""
+
+
+class PeriodListOut(BaseModel):
+    periods: list[PeriodOut] = []
+    # 다음에 마감해야 할 기간(가장 오래된 미마감 기간). 없으면 빈 문자열.
+    next_closable: str = ""
+
+
+class PeriodCloseOut(BaseModel):
+    period: str
+    net_income: float
+    closing_entry_id: int | None = None
+    closing_entry_no: str = ""

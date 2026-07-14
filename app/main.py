@@ -8,6 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
 from .database import Base, engine
+from .gl import GLError, PeriodClosedError
 from .observability import (
     RequestContextMiddleware, setup_logging, get_request_id, render_metrics,
 )
@@ -68,6 +69,20 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         status_code=exc.status_code,
         content=content,
         headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(GLError)
+async def gl_exception_handler(request: Request, exc: GLError):
+    """GL 정합성 위반(차대 불일치·마감 기간 기표·재전기 검증 실패)은 사용자 오류(400)다.
+
+    전기는 원천과 같은 트랜잭션에서 일어나므로(재고이동·결제·수기전표), 여기서 응답을
+    만들면 해당 요청의 세션은 커밋되지 않은 채 닫히며 전체가 롤백된다 — 이동은 성공했는데
+    전표가 없는 상태가 생기지 않는다. 마감 위반은 code=period_closed 로 구분한다."""
+    code = "period_closed" if isinstance(exc, PeriodClosedError) else "gl_error"
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc), "code": code, "request_id": get_request_id()},
     )
 
 

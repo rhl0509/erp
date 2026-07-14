@@ -1103,6 +1103,7 @@ export interface paths {
          * Delete Manual Entry
          * @description 수기 전표만 직접 삭제 가능. 자동 전기(MOVEMENT/PAYMENT) 전표는 원천 문서를
          *     삭제해야 동반 삭제되므로(§9-4) 여기서 지우면 대사가 깨진다 — 400 으로 막는다.
+         *     마감 전표(CLOSING)는 기간을 마감 해제해야 지워진다. 마감된 기간의 수기 전표도 못 지운다.
          */
         delete: operations["delete_manual_entry_api_gl_journal__entry_id__delete"];
         options?: never;
@@ -1184,6 +1185,7 @@ export interface paths {
          * Income Statement
          * @description 간이 손익계산서: 수익 − 비용 = 당기순이익(§7). 수익은 대변 정상잔액,
          *     비용은 차변 정상잔액이라 각각 부호를 뒤집어 양수로 표시한다.
+         *     마감 대체분개(CLOSING)는 제외한다 — 마감했다고 그 달 매출이 0 이 되면 안 된다.
          */
         get: operations["income_statement_api_gl_income_statement_get"];
         put?: never;
@@ -1203,13 +1205,82 @@ export interface paths {
         };
         /**
          * Balance Sheet
-         * @description 간이 재무상태표: 자산 = 부채 + 자본 + 당기순이익(§7). 마감 분개를 두지
-         *     않으므로 당기순이익(손익계정 누계)을 자본 아래 별도 표시한다. 시산표가
-         *     균형이면 항상 대차가 맞는다(각 전표가 자기완결적이므로).
+         * @description 간이 재무상태표: 자산 = 부채 + 자본 + 당기순이익(§7).
+         *
+         *     마감 전표를 **포함**해 집계한다 — 마감된 기간의 손익은 이미 3110 이월이익잉여금
+         *     (자본)으로 대체되었으므로 여기 net_income 에는 미마감 기간의 손익만 남는다.
+         *     시산표가 균형이면 항상 대차가 맞는다(각 전표가 자기완결적이므로).
          */
         get: operations["balance_sheet_api_gl_balance_sheet_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Periods
+         * @description 회계기간 목록(첫 전표가 있는 달 ~ 이번 달) + 각 달의 손익·마감 상태.
+         *     next_closable 은 가장 오래된 미마감 기간 — 마감은 이 순서대로만 가능하다.
+         */
+        get: operations["list_periods_api_gl_periods_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/periods/{period}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Accounting Period
+         * @description 월 마감: 손익계정을 3110 이월이익잉여금으로 대체하는 마감 전표를 만들고 기간을 닫는다.
+         *     마감 후 그 달에는 어떤 기표도 들어갈 수 없다(수기 전표·과거 날짜 결제·원천 삭제 포함).
+         *     오래된 달부터 순서대로만 마감할 수 있다. 위반은 GLError → 400(main 핸들러).
+         */
+        post: operations["close_accounting_period_api_gl_periods__period__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gl/periods/{period}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Accounting Period
+         * @description 마감 해제: 마감 전표를 지우고 기간을 다시 연다(최근 마감분부터 역순으로만).
+         *     수정 후에는 다시 마감해야 재무제표의 이월이익잉여금이 맞는다.
+         *
+         *     삭제되는 마감 전표의 스냅샷을 감사 로그 before 에 남긴다 — 전표 자체는 사라지므로
+         *     '누가 언제 3110 에서 얼마를 되돌렸는가'를 사후에 재구성할 유일한 근거다.
+         */
+        post: operations["reopen_accounting_period_api_gl_periods__period__reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1547,8 +1618,10 @@ export interface components {
         };
         /**
          * BalanceSheetOut
-         * @description 간이 재무상태표(§7): 자산 = 부채 + 자본 + 당기순이익(미마감). date_to 시점 누계.
-         *     마감 분개를 두지 않으므로 당기순이익은 손익계정에 남아 자본 아래 별도 표시한다.
+         * @description 간이 재무상태표(§7): 자산 = 부채 + 자본 + 당기순이익(미마감분). date_to 시점 누계.
+         *
+         *     마감된 기간의 손익은 마감 대체분개로 3110 이월이익잉여금(자본)에 이미 넘어가 있다.
+         *     따라서 net_income 에는 **아직 마감하지 않은 기간의 손익만** 남는다(전부 마감했다면 0).
          */
         BalanceSheetOut: {
             /** Date To */
@@ -1929,11 +2002,12 @@ export interface components {
         };
         /**
          * ManualEntryIn
-         * @description 수기 전표 입력(기초잔액·마감·수정 분개). Σ차변 == Σ대변 이어야 한다.
+         * @description 수기 전표 입력(기초잔액·수정 분개). Σ차변 == Σ대변 이어야 한다.
          */
         ManualEntryIn: {
             /**
              * Entry Date
+             * Format: date
              * @description YYYY-MM-DD
              */
             entry_date: string;
@@ -1948,6 +2022,10 @@ export interface components {
         /**
          * ManualLineIn
          * @description 수기 전표 1라인. debit·credit 중 하나만 양수(0원 라인은 서버가 제거).
+         *
+         *     금액은 Decimal 이다 — float 로 받으면 0.1+0.2 != 0.3 같은 이진 오차가 그대로
+         *     Decimal 로 실려 차대 검증이 정상 입력을 오탐하거나, 검증한 값과 DB(NUMERIC(18,4))에
+         *     저장되는 값이 달라진다.
          */
         ManualLineIn: {
             /**
@@ -1959,12 +2037,12 @@ export interface components {
              * Debit
              * @default 0
              */
-            debit: number;
+            debit: number | string;
             /**
              * Credit
              * @default 0
              */
-            credit: number;
+            credit: number | string;
             /** Partner Id */
             partner_id?: number | null;
             /**
@@ -2542,6 +2620,59 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** PeriodCloseOut */
+        PeriodCloseOut: {
+            /** Period */
+            period: string;
+            /** Net Income */
+            net_income: number;
+            /** Closing Entry Id */
+            closing_entry_id?: number | null;
+            /**
+             * Closing Entry No
+             * @default
+             */
+            closing_entry_no: string;
+        };
+        /** PeriodListOut */
+        PeriodListOut: {
+            /**
+             * Periods
+             * @default []
+             */
+            periods: components["schemas"]["PeriodOut"][];
+            /**
+             * Next Closable
+             * @default
+             */
+            next_closable: string;
+        };
+        /**
+         * PeriodOut
+         * @description 회계기간 1건. net_income 은 그 달의 손익(마감 전표 제외)이라 마감 후에도 그대로다.
+         */
+        PeriodOut: {
+            /** Period */
+            period: string;
+            /** Status */
+            status: string;
+            /** Net Income */
+            net_income: number;
+            /** Closed At */
+            closed_at?: string | null;
+            /**
+             * Closed By
+             * @default
+             */
+            closed_by: string;
+            /** Closing Entry Id */
+            closing_entry_id?: number | null;
+            /**
+             * Closing Entry No
+             * @default
+             */
+            closing_entry_no: string;
         };
         /** PermissionOut */
         PermissionOut: {
@@ -6462,6 +6593,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BalanceSheetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_periods_api_gl_periods_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_accounting_period_api_gl_periods__period__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                period: string;
+            };
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodCloseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_accounting_period_api_gl_periods__period__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                period: string;
+            };
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodOut"];
                 };
             };
             /** @description Validation Error */

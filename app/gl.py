@@ -13,7 +13,8 @@
 무전기(§4-H): TRANSFER(회사 전체 평가액 불변), 세금계산서 발행/취소(이동 시점에
 이미 인식 — 발행 시 또 전기하면 이중계상), PO/SO 확정·취소·draft 삭제.
 """
-from datetime import datetime
+import calendar
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select, delete, func
@@ -21,13 +22,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .models import (
-    Account, JournalEntry, JournalLine, StockMovement, StockBalance, Payment,
+    Account, AccountingPeriod, JournalEntry, JournalLine, StockMovement,
+    StockBalance, Payment,
 )
 from .services import generate_no_lock_split
 
 
 class GLError(Exception):
-    """GL 정합성 위반(차대 불일치, 계정 미정의, 재대사 실패 등)."""
+    """GL 정합성 위반(차대 불일치, 계정 미정의, 재대사 실패, 마감 기간 기표 등)."""
+
+
+class PeriodClosedError(GLError):
+    """마감된 회계기간을 바꾸려는 시도(소급 기표·마감분 삭제)."""
 
 
 # ---------- 계정과목 (docs/gl-design.md §3 — 시드 12계정 고정) ----------
@@ -99,6 +105,320 @@ def _account_id(db: Session, code: str) -> int:
         return db.execute(select(Account.id).where(Account.code == code)).scalar_one()
 
 
+# ---------- 기간 마감 (period close) ----------
+# 마감 전표의 원천 유형. rebuild 는 MANUAL 과 함께 이 전표를 보존한다(원천이 없어
+# 재생성 불가). UNIQUE(source_type, source_id) 가 기간당 마감 전표 1건을 보장한다.
+SOURCE_CLOSING = "CLOSING"
+SOURCE_MANUAL = "MANUAL"
+
+
+def period_of(entry_date: str) -> str:
+    """'YYYY-MM-DD' → 'YYYY-MM'. 회계기간은 월 단위다."""
+    return entry_date[:7]
+
+
+def month_end(period: str) -> str:
+    """'YYYY-MM' → 그 달의 말일 'YYYY-MM-DD'(마감 전표의 전표일자)."""
+    year, month = int(period[:4]), int(period[5:7])
+    return f"{period}-{calendar.monthrange(year, month)[1]:02d}"
+
+
+def valid_date(entry_date: str) -> str:
+    """전표일자를 진짜 날짜로 검증한다('2026-06-31'·'2026-6-15'·'' 같은 값을 막는다).
+
+    이게 없으면 차단 기준(period_of = 앞 7자)과 마감 합산 기준(월초~월말 문자열 범위)이
+    갈라져, 존재하지 않는 날짜의 전표가 '마감된 달에 속하지만 마감 대체분개에서는 빠지는'
+    상태가 된다 — 마감된 달의 손익이 0 이 되지 않는다."""
+    try:
+        parsed = date.fromisoformat(entry_date)
+    except (ValueError, TypeError):
+        raise GLError(f"전표일자 형식이 올바르지 않습니다(YYYY-MM-DD): {entry_date!r}")
+    return parsed.isoformat()
+
+
+def closed_periods(db: Session) -> set[str]:
+    return {
+        p for (p,) in db.execute(
+            select(AccountingPeriod.period).where(AccountingPeriod.status == "closed")
+        ).all()
+    }
+
+
+def close_watermark(db: Session) -> str:
+    """마감선 = 마감된 기간 중 가장 최근 달. 없으면 빈 문자열.
+    이 달 **이하**의 모든 기간이 얼어붙는다(아래 assert_period_open)."""
+    latest = db.execute(
+        select(func.max(AccountingPeriod.period)).where(AccountingPeriod.status == "closed")
+    ).scalar_one()
+    return latest or ""
+
+
+def _get_or_create_period(db: Session, period: str, *, lock: bool = False) -> AccountingPeriod:
+    """기간 행 get-or-create. 동시 생성 경합은 unique(period) 충돌을 세이브포인트로
+    흡수하고 상대가 만든 행을 다시 읽는다(_account_id 와 같은 패턴).
+
+    lock=True 면 행을 FOR UPDATE 로 선점한다 — 마감/해제가 이 락을 잡고, 기표는
+    같은 행을 FOR SHARE 로 읽으므로(assert_period_open) 둘이 직렬화된다."""
+    stmt = select(AccountingPeriod).where(AccountingPeriod.period == period)
+    if lock:
+        stmt = stmt.with_for_update()
+    row = db.execute(stmt).scalar_one_or_none()
+    if row is not None:
+        return row
+
+    savepoint = db.begin_nested()
+    try:
+        row = AccountingPeriod(period=period, status="open")
+        db.add(row)
+        db.flush()
+        savepoint.commit()
+        return row
+    except IntegrityError:
+        savepoint.rollback()
+        stmt2 = select(AccountingPeriod).where(AccountingPeriod.period == period)
+        if lock:
+            stmt2 = stmt2.with_for_update()
+        return db.execute(stmt2).scalar_one()
+
+
+def is_period_closed(db: Session, entry_date: str) -> bool:
+    """그 날짜가 마감선 이하인가(= 얼어붙은 기간인가)."""
+    watermark = close_watermark(db)
+    return bool(watermark) and period_of(valid_date(entry_date)) <= watermark
+
+
+def assert_period_open(db: Session, entry_date: str, what: str = "기표") -> None:
+    """마감된 회계기간을 건드리는 모든 경로의 단일 관문.
+
+    전기(post_journal)와 전표 삭제(delete_for_source)가 이 함수를 통과하므로,
+    수기 전표·과거 날짜 결제·마감월 재고이동·원천 삭제가 전부 여기서 막힌다.
+
+    판정 기준은 '그 달이 closed 인가'가 아니라 **마감선(가장 최근 마감월) 이하인가**다.
+    앞선 달이 아직 열려 있다는 이유로 소급 기표를 허용하면, 이미 마감·보고한 누계
+    재무상태표가 나중에 바뀐다(마감의 의미가 사라진다).
+
+    기간 행을 FOR SHARE 로 잡아, 검사 통과 후 커밋 전에 그 달이 마감되는 경합
+    (마감 트랜잭션은 FOR UPDATE 를 잡는다)을 차단한다. SQLite 는 단일 writer 라 무해.
+    """
+    entry_date = valid_date(entry_date)
+    period = period_of(entry_date)
+
+    # 기간 행을 확보하고 공유 잠금 — 마감(FOR UPDATE)과 직렬화된다.
+    row = _get_or_create_period(db, period)
+    locked = db.execute(
+        select(AccountingPeriod)
+        .where(AccountingPeriod.id == row.id)
+        .with_for_update(read=True)
+    ).scalar_one()
+
+    watermark = close_watermark(db)
+    if locked.status == "closed" or (watermark and period <= watermark):
+        raise PeriodClosedError(
+            f"{period} 회계기간이 마감되어 {what}할 수 없습니다"
+            + (f"(마감선 {watermark})" if watermark and period < watermark else "")
+            + ". 필요하면 해당 기간의 마감을 해제한 뒤 다시 시도하세요."
+        )
+
+
+def current_period() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def ensure_periods(db: Session) -> list[AccountingPeriod]:
+    """전표가 존재하는 첫 달부터 이번 달까지의 기간 행을 채우고 전부 돌려준다.
+    (행은 마감 상태를 담는 그릇일 뿐이라 미리 만들 필요가 없어 지연 생성한다.)"""
+    first = db.execute(select(func.min(JournalEntry.entry_date))).scalar_one()
+    now = current_period()
+    start = period_of(first) if first else now
+
+    wanted: list[str] = []
+    year, month = int(start[:4]), int(start[5:7])
+    while f"{year:04d}-{month:02d}" <= now:
+        wanted.append(f"{year:04d}-{month:02d}")
+        month += 1
+        if month > 12:
+            year, month = year + 1, 1
+
+    for period in wanted:
+        _get_or_create_period(db, period)   # 동시 생성 경합은 세이브포인트로 흡수
+    db.flush()
+    return sorted(
+        db.execute(select(AccountingPeriod)).scalars().all(),
+        key=lambda p: p.period,
+    )
+
+
+def period_net_income(db: Session, period: str) -> Decimal:
+    """그 달의 당기순이익 = 수익 − 비용 (마감 전표 자체는 제외).
+    마감 전표를 빼야 마감 후에도 '그 달이 얼마를 벌었는지'가 그대로 보인다."""
+    start, end = f"{period}-01", month_end(period)
+    rows = db.execute(
+        select(Account.account_type,
+               func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
+        .join(JournalLine, JournalLine.account_id == Account.id)
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+        .where(
+            Account.account_type.in_(("revenue", "expense")),
+            JournalEntry.source_type != SOURCE_CLOSING,
+            JournalEntry.entry_date >= start,
+            JournalEntry.entry_date <= end,
+        )
+        .group_by(Account.account_type)
+    ).all()
+    nets = {t: _dec(v) for t, v in rows}
+    # 수익은 대변 정상잔액이라 순차변이 음수 → 부호를 뒤집어 더한다.
+    return -nets.get("revenue", Decimal("0")) - nets.get("expense", Decimal("0"))
+
+
+def close_period(db: Session, period: str, *, actor_id=None, actor_name: str = "") -> dict:
+    """월 마감: 손익계정 잔액을 3110 이월이익잉여금으로 대체하는 CLOSING 전표를
+    만들고 기간을 닫는다. 이후 그 달 **이하**의 모든 기간에는 기표가 들어갈 수 없다.
+
+    규칙:
+    - 아직 끝나지 않은 달(이번 달·미래)은 마감할 수 없다 — 마감하면 그 달의 남은
+      영업(재고 입출고·결제)이 전부 막혀 업무가 선다.
+    - 앞선 기간이 열려 있으면 마감할 수 없다(구멍 뚫린 마감 방지 — 순서대로만).
+    - 손익 활동이 없으면 전표 없이 기간만 닫는다(0원 라인 금지 원칙).
+    - 대상 기간 행을 FOR UPDATE 로 선점한 뒤 상태를 다시 확인한다 — 같은 순간 그 달에
+      기표하려는 트랜잭션(FOR SHARE)과 직렬화되어, 마감 후 전표가 끼어드는 경합을 막는다.
+    """
+    if len(period) != 7 or period[4] != "-" or not period[:4].isdigit() or not period[5:].isdigit():
+        raise GLError("회계기간 형식이 올바르지 않습니다(YYYY-MM)")
+    if not 1 <= int(period[5:]) <= 12:
+        raise GLError("회계기간 형식이 올바르지 않습니다(YYYY-MM)")
+    if period >= current_period():
+        raise GLError(
+            f"아직 끝나지 않은 기간({period})은 마감할 수 없습니다. "
+            "월 마감은 그 달이 지난 뒤에 합니다."
+        )
+
+    ensure_periods(db)
+    target = _get_or_create_period(db, period, lock=True)   # 마감 경합 직렬화
+    if target.status == "closed":
+        raise GLError(f"{period} 기간은 이미 마감되었습니다")
+
+    periods = sorted(db.execute(select(AccountingPeriod)).scalars().all(),
+                     key=lambda p: p.period)
+    earlier_open = [p.period for p in periods if p.period < period and p.status != "closed"]
+    if earlier_open:
+        raise GLError(
+            f"앞선 기간이 아직 열려 있습니다: {', '.join(earlier_open)}. "
+            "회계기간은 오래된 달부터 순서대로 마감해야 합니다."
+        )
+
+    start, end = f"{period}-01", month_end(period)
+    # 그 달의 손익계정별 순잔액. CLOSING 은 제외한다 — 지금은 그 달의 마감 전표가
+    # 아직 없어 결과가 같지만, 정의를 period_net_income 과 하나로 맞춰 둔다.
+    rows = db.execute(
+        select(Account.code, Account.account_type,
+               func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
+        .join(JournalLine, JournalLine.account_id == Account.id)
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+        .where(
+            Account.account_type.in_(("revenue", "expense")),
+            JournalEntry.source_type != SOURCE_CLOSING,
+            JournalEntry.entry_date >= start,
+            JournalEntry.entry_date <= end,
+        )
+        .group_by(Account.code, Account.account_type)
+    ).all()
+
+    lines: list[tuple] = []
+    net_income = Decimal("0")
+    for code, _atype, net in rows:
+        net = _dec(net)          # 순차변(Σdebit − Σcredit)
+        if net == 0:
+            continue
+        # 잔액을 반대편에 기입해 손익계정을 0 으로 만든다.
+        if net > 0:              # 차변 잔액(비용이 전형) → 대변으로 상계
+            lines.append(_line(code, credit=net, memo=f"{period} 마감대체"))
+            net_income -= net
+        else:                    # 대변 잔액(수익이 전형) → 차변으로 상계
+            lines.append(_line(code, debit=-net, memo=f"{period} 마감대체"))
+            net_income += -net
+
+    entry = None
+    if lines:
+        # 상계 합계의 반대편 = 당기순이익(이익이면 자본 증가 → 3110 대변)
+        if net_income > 0:
+            lines.append(_line(ACC_RETAINED, credit=net_income, memo=f"{period} 당기순이익 대체"))
+        else:
+            lines.append(_line(ACC_RETAINED, debit=-net_income, memo=f"{period} 당기순손실 대체"))
+
+        entry = post_journal(
+            db, source_type=SOURCE_CLOSING, source_id=target.id,
+            entry_date=end, description=f"{period} 기간 마감 대체분개",
+            lines=lines, allow_closed_period=True,   # 지금 닫는 중인 기간에는 기표해야 한다
+        )
+
+    target.status = "closed"
+    target.closed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    target.closed_by_id = actor_id
+    target.closed_by_name = actor_name
+    target.net_income = net_income
+    db.flush()
+
+    return {
+        "period": period,
+        "net_income": net_income,
+        "closing_entry_id": entry.id if entry else None,
+        "closing_entry_no": entry.entry_no if entry else "",
+    }
+
+
+def reopen_period(db: Session, period: str) -> dict:
+    """마감 해제: 마감 전표를 지우고 기간을 다시 연다.
+    가장 최근에 마감된 기간부터 역순으로만 해제할 수 있다(중간 기간만 열면
+    그 뒤 기간들의 이월이익잉여금이 어긋난다).
+
+    돌려주는 dict 는 삭제한 마감 전표의 스냅샷을 담는다 — 전표 자체는 사라지므로
+    감사 로그에 '무엇을 되돌렸는지'를 남길 수 있는 유일한 근거다(호출자가 기록한다)."""
+    ensure_periods(db)
+    target = _get_or_create_period(db, period, lock=True)   # 마감/기표와 직렬화
+    if target.status != "closed":
+        raise GLError(f"{period} 기간은 마감되어 있지 않습니다")
+
+    later_closed = db.execute(
+        select(AccountingPeriod.period).where(
+            AccountingPeriod.period > period,
+            AccountingPeriod.status == "closed",
+        ).order_by(AccountingPeriod.period)
+    ).scalars().all()
+    if later_closed:
+        raise GLError(
+            f"이후 기간이 마감되어 있습니다: {', '.join(later_closed)}. "
+            "마감 해제는 최근 기간부터 역순으로만 할 수 있습니다."
+        )
+
+    entry = db.execute(
+        select(JournalEntry).where(
+            JournalEntry.source_type == SOURCE_CLOSING,
+            JournalEntry.source_id == target.id,
+        )
+    ).scalar_one_or_none()
+
+    before = {
+        "closed_at": target.closed_at,
+        "closed_by": target.closed_by_name,
+        "net_income": float(target.net_income or 0),
+        "closing_entry_no": entry.entry_no if entry else "",
+        "closing_lines": [
+            {"account_id": l.account_id, "debit": float(l.debit), "credit": float(l.credit)}
+            for l in (entry.lines if entry else [])
+        ],
+    }
+    if entry is not None:
+        db.delete(entry)
+
+    target.status = "open"
+    target.closed_at = None
+    target.closed_by_id = None
+    target.closed_by_name = ""
+    target.net_income = Decimal("0")
+    db.flush()
+    return {"period": period, "reopened": True, "before": before}
+
+
 # ---------- 전기 코어 ----------
 def _line(code: str, debit=0, credit=0, partner_id: int | None = None, memo: str = ""):
     """분개 라인 스펙 튜플. 금액은 Decimal 로 정규화한다."""
@@ -113,6 +433,7 @@ def post_journal(
     entry_date: str,
     description: str,
     lines: list[tuple],
+    allow_closed_period: bool = False,
 ) -> JournalEntry | None:
     """전표 1건을 전기한다(모든 전기 함수의 단일 경로).
 
@@ -120,11 +441,17 @@ def post_journal(
     - 0원 라인은 버린다(0원 라인 금지). 유효 라인이 없으면 전표 자체를 만들지
       않는다(예: 원가 0 재고의 0원 출고 — 회계 영향 없음).
     - 차대 합 불일치·음수 금액·차대 동시 기입은 GLError → 전체 트랜잭션 롤백.
+    - **마감된 회계기간에는 기표할 수 없다**(PeriodClosedError). 모든 전기가 이 함수를
+      지나므로 수기 전표·과거 날짜 결제·마감월 재고이동이 여기서 함께 막힌다.
+      allow_closed_period 는 마감 대체분개 자신(close_period)만 쓴다.
     - 전표번호는 이동번호와 같은 락분리 채번(JV-YYYYMM-####, 결번 허용).
     """
     effective = [l for l in lines if l[1] != 0 or l[2] != 0]
     if not effective:
         return None
+
+    if not allow_closed_period:
+        assert_period_open(db, entry_date, "기표")
 
     if source_id is not None:
         existing = db.execute(
@@ -171,7 +498,10 @@ def post_journal(
 def delete_for_source(db: Session, source_type: str, source_id: int) -> bool:
     """원천 삭제 시 전표 동반 삭제(§9-4 — 삭제 이력은 AuditLog 가 담당).
     같은 트랜잭션에서 호출해야 한다. ORM delete 로 라인 cascade 를 보장한다
-    (SQLite 는 FK cascade 미적용이 기본이라 DB cascade 에 의존하지 않는다)."""
+    (SQLite 는 FK cascade 미적용이 기본이라 DB cascade 에 의존하지 않는다).
+
+    마감된 기간의 전표는 지울 수 없다 — 원천(재고이동·결제)을 삭제해 과거 마감분의
+    숫자를 바꾸는 경로도 여기서 막힌다(PeriodClosedError → 원천 삭제 자체가 400)."""
     entry = db.execute(
         select(JournalEntry).where(
             JournalEntry.source_type == source_type,
@@ -180,6 +510,7 @@ def delete_for_source(db: Session, source_type: str, source_id: int) -> bool:
     ).scalar_one_or_none()
     if entry is None:
         return False
+    assert_period_open(db, entry.entry_date, "전표를 삭제")
     db.delete(entry)
     db.flush()
     return True
@@ -364,13 +695,25 @@ def rebuild_gl(db: Session) -> dict:
     수식으로 유지해 복원한다. replay 종료 시 시뮬레이터가 현재 stock_balances 와
     일치해야 하며, 불일치면 GLError 로 중단한다(과거 이력 단절 신호).
 
-    S6 MANUAL 전표(기초잔액·수기 분개)는 원천이 없어 재생성 불가하므로 보존한다
-    (자동 전기분 MOVEMENT/PAYMENT 만 삭제·replay). 삭제하면 재전기가 곧 데이터
-    손실이 된다."""
-    # 1) 자동 전기분 전표만 삭제(MANUAL 보존). 초기 백필이면 0건.
-    auto_entry_ids = select(JournalEntry.id).where(JournalEntry.source_type != "MANUAL")
+    S6 MANUAL 전표(기초잔액·수기 분개)와 CLOSING 마감 전표는 원천이 없어 재생성
+    불가하므로 보존한다(자동 전기분 MOVEMENT/PAYMENT 만 삭제·replay). 삭제하면
+    재전기가 곧 데이터 손실이 된다.
+
+    **마감된 기간이 하나라도 있으면 재전기하지 않는다** — replay 는 마감된 달의 전표까지
+    다시 만들어 마감분 숫자를 바꿀 수 있다. 정말 필요하면 해당 기간을 마감 해제한 뒤
+    재전기하고 다시 마감한다."""
+    closed = sorted(closed_periods(db))
+    if closed:
+        raise PeriodClosedError(
+            f"마감된 회계기간이 있어 재전기할 수 없습니다: {', '.join(closed)}. "
+            "재전기가 꼭 필요하면 해당 기간의 마감을 해제한 뒤 실행하고, 끝나면 다시 마감하세요."
+        )
+
+    # 1) 자동 전기분 전표만 삭제(MANUAL·CLOSING 보존). 초기 백필이면 0건.
+    preserved = (SOURCE_MANUAL, SOURCE_CLOSING)
+    auto_entry_ids = select(JournalEntry.id).where(JournalEntry.source_type.notin_(preserved))
     db.execute(delete(JournalLine).where(JournalLine.entry_id.in_(auto_entry_ids)))
-    db.execute(delete(JournalEntry).where(JournalEntry.source_type != "MANUAL"))
+    db.execute(delete(JournalEntry).where(JournalEntry.source_type.notin_(preserved)))
     db.flush()
     ensure_accounts(db)
 
@@ -448,9 +791,9 @@ def _gl_net_debit(db: Session, code: str, *, auto_only: bool = False) -> Decimal
     """계정의 GL 순차변 잔액(Σdebit − Σcredit).
 
     auto_only=True 면 자동 전기분(MOVEMENT/PAYMENT)만 합산한다. 재고·AR·AP
-    재대사는 보조원장(valuation·aging)이 자동 전기분만 반영하므로, MANUAL
-    수기 전표(기초잔액 등)를 제외해야 '자동 전기 == 보조원장' 불변식이 유지된다
-    (그래야 MANUAL 이 있어도 rebuild 후 재대사가 통과한다)."""
+    재대사는 보조원장(valuation·aging)이 자동 전기분만 반영하므로, MANUAL 수기
+    전표(기초잔액 등)와 CLOSING 마감 전표를 제외해야 '자동 전기 == 보조원장'
+    불변식이 유지된다(그래야 수기·마감 전표가 있어도 재대사가 통과한다)."""
     stmt = (
         select(func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0))
         .join(Account, JournalLine.account_id == Account.id)
@@ -458,7 +801,7 @@ def _gl_net_debit(db: Session, code: str, *, auto_only: bool = False) -> Decimal
     )
     if auto_only:
         stmt = stmt.join(JournalEntry, JournalLine.entry_id == JournalEntry.id).where(
-            JournalEntry.source_type != "MANUAL"
+            JournalEntry.source_type.notin_((SOURCE_MANUAL, SOURCE_CLOSING))
         )
     return _dec(db.execute(stmt).scalar_one())
 

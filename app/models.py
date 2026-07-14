@@ -80,6 +80,31 @@ class User(Base, TimestampMixin):
         return "rejected" if self.rejected_at else "pending"
 
 
+class AccountingPeriod(Base, TimestampMixin):
+    """회계기간(월 단위). 마감하면 그 달에 속하는 기표가 전면 차단된다.
+
+    - period: 'YYYY-MM'. 행은 필요할 때 지연 생성한다(ensure_periods).
+    - 마감 시 손익계정을 3110 이월이익잉여금으로 대체하는 CLOSING 전표를 만든다
+      (JournalEntry.source_type='CLOSING', source_id=이 행의 id — UNIQUE 로 기간당 1건).
+    - 마감 해제는 최신 마감 기간부터 역순으로만 가능하고, CLOSING 전표를 지운다.
+    """
+
+    __tablename__ = "accounting_periods"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    period: Mapped[str] = mapped_column(String(7), unique=True, index=True)  # YYYY-MM
+    status: Mapped[str] = mapped_column(String(10), default="open", server_default="open")
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    closed_by_name: Mapped[str] = mapped_column(String(50), default="")
+    # 마감 시점의 그 달 당기순이익(스냅샷 — 목록에서 재계산 없이 보여주기 위함)
+    net_income: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), default=Decimal("0"), server_default="0"
+    )
+
+
 class PasswordResetToken(Base):
     """비밀번호 재설정 토큰. 원문은 메일로만 나가고 DB 에는 sha256 해시만 남긴다
     (DB 유출 시에도 토큰을 재사용할 수 없게). 사용 즉시 used_at 을 찍어 1회용으로 만든다."""

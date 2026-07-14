@@ -13,7 +13,8 @@ from ..services import paginate
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
 _ACTIONS = ("CREATE", "UPDATE", "DELETE")
-_ENTITIES = ("user", "partner", "item", "stock", "purchase_order", "sales_order", "payment", "tax_invoice")
+_ENTITIES = ("user", "partner", "item", "stock", "purchase_order", "sales_order",
+             "payment", "tax_invoice", "warehouse", "gl", "gl_period")
 
 
 def _parse_date(value: str) -> datetime:
