@@ -12,3 +12,4 @@ openpyxl>=3.1
 alembic>=1.13
 pyotp>=2.9          # 2단계 인증(TOTP)
 qrcode>=7.4         # 2FA 등록용 QR (SVG 렌더 — Pillow 불필요)
+tzdata>=2024.1      # zoneinfo 시간대 DB (Windows 는 OS에 IANA DB가 없어 필수)

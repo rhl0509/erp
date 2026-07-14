@@ -15,6 +15,7 @@ from ..schemas import (
     TransactionItemSubtotal, AgingReport, AgingBucket,
 )
 from ..deps import require_permission
+from ..timeutil import now_business, today
 from ..services import paginate
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -31,7 +32,11 @@ def aging_report(
     """미수(AR)/미지급(AP) 연령분석. 청구(이동)에 결제·반품을 FIFO(오래된 청구부터)로
     상계하고, 남은 미결제 금액을 청구 경과일 구간(0-30/31-60/61-90/90+)으로 분류한다."""
     try:
-        as_of_dt = datetime.strptime(as_of, "%Y-%m-%d") if as_of else datetime.now()
+        # 기준일 미지정이면 '사업장 기준 오늘'(앱 프로세스의 로컬 시각이 아니라)
+        as_of_dt = (
+            datetime.strptime(as_of, "%Y-%m-%d") if as_of
+            else datetime.combine(today(), datetime.min.time())
+        )
     except ValueError:
         raise HTTPException(status_code=400, detail="기준일 형식이 올바르지 않습니다 (YYYY-MM-DD)")
     as_of_dt = as_of_dt.replace(hour=23, minute=59, second=59)
@@ -591,7 +596,7 @@ def export_transactions(
     buf.seek(0)
 
     # 파일명은 헤더 인코딩 문제를 피하기 위해 ASCII만 사용
-    filename = f"sales_purchase_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"sales_purchase_{now_business().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(
         buf,
         media_type=XLSX_MEDIA_TYPE,

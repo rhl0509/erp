@@ -8,6 +8,7 @@ from ..database import get_db
 from ..models import Payment, Partner, PurchaseOrder, SalesOrder, User
 from ..schemas import PaymentCreate, PaymentOut, Page
 from ..deps import require_permission
+from ..timeutil import today_str
 from ..services import generate_code, record_audit, paginate, compute_tax
 from ..gl import post_for_payment, delete_for_source
 
@@ -117,7 +118,7 @@ def create_payment(
         partner_id=payload.partner_id,
         kind=payload.kind,
         amount=payload.amount,
-        pay_date=payload.pay_date or datetime.now().strftime("%Y-%m-%d"),
+        pay_date=payload.pay_date or today_str(),   # 사업장 기준 오늘
         method=payload.method,
         note=payload.note,
         ref_type=payload.ref_type,

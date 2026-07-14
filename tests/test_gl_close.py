@@ -8,9 +8,11 @@
 그래서 테스트는 지난 달에 손익을 만들고(수기 전표) 그 달을 마감한다 — 재고이동은 항상
 '오늘' 날짜라 지난 달로 만들 수 없기 때문이다.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
-TODAY = datetime.now(timezone.utc).date()
+from app.timeutil import today as business_today   # 서버와 같은 '오늘'(사업장 시간대)
+
+TODAY = business_today()
 THIS_MONTH = TODAY.strftime("%Y-%m")
 
 LAST_MONTH_END = TODAY.replace(day=1) - timedelta(days=1)   # 지난 달 말일

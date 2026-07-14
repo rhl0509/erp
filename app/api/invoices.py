@@ -8,6 +8,7 @@ from ..database import get_db
 from ..models import TaxInvoice, TaxInvoiceLine, PurchaseOrder, SalesOrder, User
 from ..schemas import TaxInvoiceCreate, TaxInvoiceOut, Page
 from ..deps import require_permission
+from ..timeutil import today_str
 from ..services import generate_code, record_audit, paginate, compute_tax
 
 router = APIRouter(prefix="/api/tax-invoices", tags=["tax-invoices"])
@@ -82,7 +83,7 @@ def issue_invoice(
         kind=kind, ref_type=payload.ref_type, ref_id=doc.id,
         partner_id=partner.id, partner_name=partner.name,
         partner_business_no=partner.business_no,
-        issue_date=payload.issue_date or datetime.now().strftime("%Y-%m-%d"),
+        issue_date=payload.issue_date or today_str(),   # 사업장 기준 오늘
         status="issued", note=payload.note,
     )
     supply_total = tax_total = 0

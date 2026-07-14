@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .models import NumberSequence, AuditLog, StockMovement, StockBalance, Item, Warehouse
+from .timeutil import seq_period
 
 
 class StockError(Exception):
@@ -87,7 +88,7 @@ def generate_code(
     예) generate_code(db, "PARTNER", "CUST")            -> CUST-0001
         generate_code(db, "PO", "PO", use_period=True)  -> PO-202506-0001
     """
-    period = datetime.now().strftime("%Y%m") if use_period else ""
+    period = seq_period() if use_period else ""   # 사업장 기준 달(app/timeutil)
     row = _acquire_seq_row(db, seq_key, prefix, period)
 
     row.last_seq += 1
@@ -119,7 +120,7 @@ def generate_no_lock_split(db: Session, seq_key: str, prefix: str, width: int = 
     if bind.dialect.name == "sqlite":
         return generate_code(db, seq_key, prefix, use_period=True, width=width)
 
-    period = datetime.now().strftime("%Y%m")
+    period = seq_period()   # 사업장 기준 달 — 번호의 달과 전표일자의 달이 갈라지지 않게
     # 메인 세션과 같은 엔진(커넥션 풀)에서 새 세션을 연다. 요청당 커넥션을 잠깐
     # 2개 쓰지만 즉시 commit·close 로 반납해 풀 점유는 순간적이다.
     # (테스트가 자체 엔진 세션을 넘겨도 동작하도록 SessionLocal 대신 db 의 bind 사용)

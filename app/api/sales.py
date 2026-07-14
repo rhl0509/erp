@@ -11,6 +11,7 @@ from ..schemas import (
     ShipRequest, ReturnRequest, Page,
 )
 from ..deps import require_permission
+from ..timeutil import today_str
 from ..services import (
     generate_code, record_audit, paginate, post_movement, post_return, compute_tax, StockError,
 )
@@ -19,7 +20,8 @@ router = APIRouter(prefix="/api/sales-orders", tags=["sales"])
 
 
 def _today() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+    """주문일 기본값 — 사업장 시간대 기준(app/timeutil)."""
+    return today_str()
 
 
 def _line_out(l: SalesOrderLine) -> SalesOrderLineOut:

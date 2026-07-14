@@ -14,7 +14,7 @@
 이미 인식 — 발행 시 또 전기하면 이중계상), PO/SO 확정·취소·draft 삭제.
 """
 import calendar
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import select, delete, func
@@ -26,6 +26,7 @@ from .models import (
     StockBalance, Payment,
 )
 from .services import generate_no_lock_split
+from .timeutil import business_date_of, current_period, utc_naive_now
 
 
 class GLError(Exception):
@@ -220,10 +221,6 @@ def assert_period_open(db: Session, entry_date: str, what: str = "기표") -> No
         )
 
 
-def current_period() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m")
-
-
 def ensure_periods(db: Session) -> list[AccountingPeriod]:
     """전표가 존재하는 첫 달부터 이번 달까지의 기간 행을 채우고 전부 돌려준다.
     (행은 마감 상태를 담는 그릇일 뿐이라 미리 만들 필요가 없어 지연 생성한다.)"""
@@ -352,7 +349,7 @@ def close_period(db: Session, period: str, *, actor_id=None, actor_name: str = "
         )
 
     target.status = "closed"
-    target.closed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    target.closed_at = utc_naive_now()   # '언제 마감했나'는 기록 시각(UTC) — 회계 날짜와 별개
     target.closed_by_id = actor_id
     target.closed_by_name = actor_name
     target.net_income = net_income
@@ -538,7 +535,9 @@ def post_for_movement(
     total = supply + tax                                    # AP/AR 청구액(VAT 포함)
     cost_amt = Decimal(movement.cost or 0) * aq             # qty×이동원가
     pid = movement.partner_id
-    entry_date = (movement.created_at or datetime.now()).strftime("%Y-%m-%d")
+    # 전표일자는 사업장 시간대 기준(app/timeutil) — created_at 은 DB 시각이라 그대로 쓰면
+    # 월 경계에서 하루가 인접 월로 샌다(예: UTC DB + KST 사업장 → 1일 오전이 전월로).
+    entry_date = business_date_of(movement.created_at)
 
     lines: list[tuple] = []
     if mtype == "IN" and qty > 0:
@@ -630,7 +629,7 @@ def post_for_payment(db: Session, payment: Payment) -> JournalEntry | None:
     """G. 결제 — AP 지급: 차) 외상매입금 / 대) 현금및예금.
     AR 수금: 차) 현금및예금 / 대) 외상매출금. method 구분 없이 1110 단일(§9-7)."""
     amount = Decimal(payment.amount)
-    entry_date = payment.pay_date or (payment.created_at or datetime.now()).strftime("%Y-%m-%d")
+    entry_date = payment.pay_date or business_date_of(payment.created_at)
     if payment.kind == "AP":
         desc = f"지급 {payment.payment_no}"
         lines = [

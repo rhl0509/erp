@@ -11,6 +11,7 @@ from ..schemas import (
     TransactionPartnerSubtotal, TransactionItemSubtotal,
 )
 from ..deps import require_permission
+from ..timeutil import business_date_of, business_tz, now_business, to_db_naive
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -40,8 +41,10 @@ def get_overview(
     )
 
     # ---- 이번 달 (월 경계는 DB 함수 대신 파이썬에서 계산해 SQLite/MySQL 모두 호환) ----
-    now = datetime.now()
-    month_start = datetime(now.year, now.month, 1)
+    # 경계는 **사업장 시간대**의 1일 0시를 DB 시각으로 환산해 잡는다 — created_at 은 DB
+    # 시각이므로, 앱 로컬 시각으로 만든 경계와 비교하면 시간대가 다를 때 하루가 어긋난다.
+    now = now_business()
+    month_start = to_db_naive(now.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
     row = db.execute(
         select(
             func.sum(case((StockMovement.movement_type == "IN", amount), else_=0)),
@@ -64,7 +67,9 @@ def get_overview(
             y, m = y - 1, 12
     month_keys.reverse()
 
-    range_start = datetime(month_keys[0][0], month_keys[0][1], 1)
+    range_start = to_db_naive(
+        datetime(month_keys[0][0], month_keys[0][1], 1, tzinfo=business_tz())
+    )
     rows = db.execute(
         select(
             StockMovement.created_at,
@@ -78,7 +83,8 @@ def get_overview(
     ).all()
     buckets: dict[str, dict[str, int]] = {}
     for created_at, movement_type, quantity, unit_price in rows:
-        key = f"{created_at.year}-{created_at.month:02d}"
+        # 이동이 '어느 달의 실적인가'도 사업장 기준으로 판단한다(전표일자와 같은 정의).
+        key = business_date_of(created_at)[:7]
         b = buckets.setdefault(key, {"purchase": 0, "sales": 0})
         b["purchase" if movement_type == "IN" else "sales"] += quantity * unit_price
     monthly = []

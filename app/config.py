@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"   # lax / strict / none
 
+    # ---------- 시간대 ----------
+    # 회계 날짜(전표일자·발행일·채번 기간·이번 달)의 기준이 되는 사업장 시간대.
+    business_tz: str = "Asia/Seoul"
+    # DB 의 naive 타임스탬프(created_at 등)가 어느 시간대로 기록되는가.
+    # MySQL 은 세션 time_zone(기본 system), SQLite 의 CURRENT_TIMESTAMP 는 UTC 다.
+    # DB 를 KST 로 운영한다면 Asia/Seoul 로 두면 변환이 항등이 된다.
+    db_tz: str = "UTC"
+
     # ---------- 비밀번호 정책 ----------
     # 길이 하한만 설정으로 뺀다(복잡도 규칙은 security.validate_password 고정).
     password_min_length: int = 10
