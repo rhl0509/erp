@@ -1,4 +1,5 @@
-/* index.html .login-wrap / .login-card / .sub / .login-hint 이식 */
+/* 인증 화면(로그인·회원가입·비밀번호 찾기/재설정/강제변경) 공통 카드.
+   index.html .login-wrap / .login-card / .sub / .login-hint 이식 — 네 화면이 같은 껍데기를 쓴다. */
 .wrap {
   min-height: 100vh;
   display: flex;
@@ -42,7 +43,7 @@
   margin-top: var(--s3);
 }
 
-/* 가입 신청 완료 안내(레거시 #registerOk 패리티) */
+/* 완료 안내(가입 신청·재설정 요청 등) */
 .ok {
   margin-top: var(--s4);
   font-size: var(--t-cap);
@@ -51,7 +52,32 @@
   text-align: center;
 }
 
-/* 로그인 ↔ 회원가입 전환 링크(레거시 #toRegister/#toLogin 패리티) */
+/* 입력칸 바로 아래 인라인 안내(아이디 사용 가능 등) */
+.okInline {
+  margin: calc(-1 * var(--s2)) 0 var(--s3);
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+/* 비밀번호 정책 안내(서버 GET /api/auth/password-policy) */
+.policy {
+  margin: var(--s2) 0 var(--s4);
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+/* 안내 박스(관리자 임시비번 발급 경로 등) */
+.notice {
+  margin: var(--s4) 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+/* 화면 전환 링크(로그인 ↔ 회원가입 ↔ 비밀번호 찾기) */
 .linkBtn {
   background: none;
   border: none;

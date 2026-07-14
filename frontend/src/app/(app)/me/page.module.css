@@ -79,9 +79,59 @@
   color: var(--muted);
 }
 
-/* 레거시 비밀번호 변경 구획(border-top) 패리티 */
+/* 보안 설정 구획(비밀번호 · 2단계 인증) */
 .pwSection {
   margin-top: 22px;
   border-top: 1px solid var(--line);
   padding-top: 18px;
+}
+
+.secRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s4) 0;
+}
+
+.secRow + .secRow {
+  border-top: 1px solid var(--line-2);
+}
+
+.secTitle {
+  font-weight: 700;
+}
+
+.secDesc {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  line-height: 1.6;
+}
+
+/* 2FA 등록 QR(서버가 만든 SVG) */
+.qr {
+  display: flex;
+  justify-content: center;
+  padding: var(--s4);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.qr svg {
+  width: 180px;
+  height: 180px;
+}
+
+.secret {
+  display: inline-block;
+  margin-top: var(--s2);
+  padding: 4px 8px;
+  background: var(--line-2);
+  border-radius: var(--radius);
+  font-family: var(--mono, monospace);
+  font-size: var(--t-sm);
+  letter-spacing: 0.06em;
+  user-select: all;
 }

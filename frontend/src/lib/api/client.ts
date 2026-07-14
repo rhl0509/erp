@@ -65,18 +65,53 @@ export function unwrap<T>(result: {
 }
 
 /**
+ * 2단계 인증이 켜진 계정이 OTP 없이(또는 틀린 코드로) 로그인했을 때.
+ * 서버가 401 + X-OTP-Required 헤더로 구분해 주므로, 폼은 이걸 잡아 OTP 입력 단계로 넘어간다.
+ */
+export class OtpRequiredError extends Error {
+  /** 코드를 이미 입력했는데 틀린 경우 true — 화면 문구를 구분한다. */
+  wrongCode: boolean;
+
+  constructor(message: string, wrongCode: boolean) {
+    super(message);
+    this.name = "OtpRequiredError";
+    this.wrongCode = wrongCode;
+  }
+}
+
+export type LoginResult = {
+  /** 임시비밀번호·정책 미달 계정 — 비밀번호를 바꿔야 업무 화면을 쓸 수 있다. */
+  mustChangePassword: boolean;
+};
+
+/**
  * 로그인 — OAuth2 form-encoded(POST /api/auth/login). 성공 시 서버가 httpOnly
  * 세션 쿠키를 심는다(응답 본문의 access_token 은 헤더 방식 클라이언트용이라 무시).
+ * 2FA 계정은 otp 를 함께 보내야 하며, 없으면 OtpRequiredError 를 던진다.
  */
 export async function loginRequest(
   username: string,
   password: string,
-): Promise<void> {
+  otp?: string,
+): Promise<LoginResult> {
   const result = await client.POST("/api/auth/login", {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: { username, password, scope: "" },
+    body: { username, password, scope: "", otp: otp ?? "" },
   });
-  unwrap(result); // 실패 시 throw
+  if (result.response.headers.get("X-OTP-Required") === "1") {
+    const detail = (result.error as Partial<ApiError> | undefined)?.detail;
+    throw new OtpRequiredError(
+      detail || "2단계 인증 코드를 입력해 주세요.",
+      Boolean(otp),
+    );
+  }
+  const token = unwrap(result); // 그 외 실패는 ApiRequestError
+  return { mustChangePassword: Boolean(token.must_change_password) };
+}
+
+/** 세션 연장(POST /api/auth/refresh) — 쿠키를 새 만료로 다시 심는다. */
+export async function refreshSession(): Promise<void> {
+  await client.POST("/api/auth/refresh");
 }
 
 /** 로그아웃 — 서버가 세션 쿠키를 제거한다. */

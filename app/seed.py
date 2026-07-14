@@ -19,7 +19,7 @@ from sqlalchemy import select
 from .database import SessionLocal, Base, engine
 from . import models  # noqa: F401
 from .models import User, Role, Permission, Partner, Item, StockMovement, Warehouse
-from .security import hash_password
+from .security import hash_password, validate_password
 from .services import generate_code, post_movement
 from .gl import ensure_accounts
 
@@ -122,10 +122,19 @@ def run():
         admin = db.execute(select(User).where(User.username == "admin")).scalar_one_or_none()
         if not admin:
             password, generated = _admin_password()
+            # 비밀번호 정책(app/security.validate_password)에 못 미치는 초기 비밀번호는
+            # 첫 로그인에서 변경을 강제한다(로컬 기본값 admin1234 가 여기 해당).
+            try:
+                validate_password(password, "admin")
+                must_change = False
+            except ValueError:
+                must_change = True
+
             admin = User(
                 username="admin",
                 full_name="관리자",
                 hashed_password=hash_password(password),
+                must_change_password=must_change,
             )
             admin.roles = [admin_role]
             db.add(admin)
@@ -135,9 +144,14 @@ def run():
                     "로그인 후 반드시 비밀번호를 변경하세요."
                 )
             elif password == "admin1234":
-                admin_pw_msg = "로그인 계정: admin / admin1234 (로컬 개발 기본값)"
+                admin_pw_msg = (
+                    "로그인 계정: admin / admin1234 (로컬 개발 기본값)\n"
+                    "이 비밀번호는 정책 미달이라 첫 로그인 후 변경해야 업무 화면을 쓸 수 있습니다."
+                )
             else:
                 admin_pw_msg = "로그인 계정: admin / (SEED_ADMIN_PASSWORD 로 지정한 값)"
+            if must_change and not generated:
+                admin_pw_msg += "" if password == "admin1234" else "\n(정책 미달 비밀번호 — 첫 로그인 시 변경 필요)"
 
         # 5) 기본창고 (멱등) — 재고 이동은 창고 차원이 필수라 마스터보다 먼저 보장.
         #    창고 미지정 API 호출(하위호환)은 전부 이 창고(is_default=True)로 해석된다.

@@ -1,7 +1,8 @@
+import re
 from datetime import datetime
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 T = TypeVar("T")
 
@@ -27,6 +28,51 @@ class ErrorOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # 임시비밀번호·정책 미달 계정은 로그인은 되지만 비밀번호를 바꿔야 업무 API 를 쓸 수 있다.
+    must_change_password: bool = False
+
+
+class PasswordPolicyOut(BaseModel):
+    """비밀번호 정책. 화면 안내 문구가 서버 규칙과 갈라지지 않도록 서버가 내려준다."""
+    min_length: int
+    text: str
+
+
+class ForgotPasswordIn(BaseModel):
+    """아이디 또는 이메일. 계정 존재 여부는 응답으로 알려주지 않는다(열거 방지)."""
+    identifier: str = Field(min_length=1, max_length=255)
+
+
+class ForgotPasswordOut(BaseModel):
+    detail: str
+    # email: 재설정 링크를 메일로 보냄 / admin: SMTP 미설정 → 관리자 임시비번 발급 안내
+    delivery: str
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=10)
+    new_password: str
+
+
+class UsernameCheckOut(BaseModel):
+    username: str
+    available: bool
+
+
+class TotpSetupOut(BaseModel):
+    """2FA 설정 시작. secret 을 인증 앱에 등록(QR 스캔 또는 수동 입력)한 뒤 enable 로 확정."""
+    secret: str
+    otpauth_uri: str
+    qr_svg: str
+
+
+class TotpCodeIn(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+class TotpDisableIn(BaseModel):
+    """2FA 해제는 비밀번호로 본인을 재확인한다(세션 탈취만으로 해제되지 않게)."""
+    password: str = Field(min_length=1)
 
 
 # ---------- 권한 / 역할 / 사용자 ----------
@@ -52,28 +98,79 @@ class UserOut(BaseModel):
     full_name: str = ""
     email: str = ""
     is_active: bool
+    status: str = "pending"          # pending / active / rejected (모델 파생 속성)
+    department: str = ""
+    reject_reason: str = ""
+    signup_reason: str = ""
+    totp_enabled: bool = False
+    last_login_at: datetime | None = None
     roles: list[RoleOut] = []
+
+    @field_validator("email", "department", "reject_reason", "signup_reason", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v):
+        # email 은 DB 에서 NULL(미입력)일 수 있다 — 화면 계약은 빈 문자열로 유지한다.
+        return "" if v is None else v
 
 
 class MeOut(UserOut):
     """현재 로그인 사용자. 화면에서 버튼 노출 제어용 권한 목록 포함."""
     permissions: list[str] = []
+    must_change_password: bool = False
+
+
+def _clean_email(v: str | None) -> str:
+    """빈 값 허용, 있으면 형식 검사. 저장 시 소문자로 정규화한다."""
+    if v is None:
+        return ""
+    v = v.strip().lower()
+    if not v:
+        return ""
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", v):
+        raise ValueError("이메일 형식이 올바르지 않습니다")
+    return v
 
 
 class UserCreate(BaseModel):
+    """관리자 회원 등록. 비밀번호 정책은 라우터에서 validate_password 로 검증한다
+    (아이디 포함 여부까지 보려면 username 이 필요하고, 메시지를 필드 오류로 내려야 한다)."""
     username: str = Field(min_length=2, max_length=50)
-    password: str = Field(min_length=8)
+    password: str
     full_name: str = ""
     email: str = ""
     role_ids: list[int] = []
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _email(cls, v):
+        return _clean_email(v)
 
 
 class RegisterCreate(BaseModel):
     """공개 회원가입 입력. 역할·활성 여부는 지정 불가(비활성·무권한으로 생성)."""
     username: str = Field(min_length=2, max_length=50)
-    password: str = Field(min_length=8)
+    password: str
     full_name: str = ""
     email: str = ""
+    department: str = Field("", max_length=100)      # 승인 판단용
+    signup_reason: str = Field("", max_length=255)   # 승인 판단용
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _email(cls, v):
+        return _clean_email(v)
+
+
+class ProfileUpdate(BaseModel):
+    """본인 프로필 수정(이름·이메일·부서). 역할·활성 여부는 본인이 바꿀 수 없다."""
+    full_name: str = Field("", max_length=100)
+    email: str = ""
+    department: str = Field("", max_length=100)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _email(cls, v):
+        return _clean_email(v)
 
 
 class UserUpdate(BaseModel):
@@ -83,11 +180,27 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
     role_ids: list[int] | None = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _email(cls, v):
+        return None if v is None else _clean_email(v)
+
+
+class UserReject(BaseModel):
+    """가입 거절. 사유는 본인에게 보여줄 수 있으므로 남긴다."""
+    reason: str = Field("", max_length=255)
+
+
+class TempPasswordOut(BaseModel):
+    """관리자 임시비밀번호 발급 결과. 평문은 이 응답에서 한 번만 나온다(DB엔 해시만)."""
+    username: str
+    temp_password: str
+
 
 class PasswordChange(BaseModel):
     """본인 비밀번호 변경. 현재 비밀번호 확인 후 교체."""
     current_password: str = Field(min_length=1)
-    new_password: str = Field(min_length=8)
+    new_password: str
 
 
 # ---------- 감사 로그 ----------

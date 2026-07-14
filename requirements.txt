@@ -10,3 +10,5 @@ bcrypt>=4.1
 python-multipart>=0.0.9
 openpyxl>=3.1
 alembic>=1.13
+pyotp>=2.9          # 2단계 인증(TOTP)
+qrcode>=7.4         # 2FA 등록용 QR (SVG 렌더 — Pillow 불필요)

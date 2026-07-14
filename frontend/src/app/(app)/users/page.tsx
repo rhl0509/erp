@@ -9,6 +9,7 @@ import {
 import { useForm } from "react-hook-form";
 
 import Button from "@/components/ui/Button";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import DataTable, { Pager, type Column } from "@/components/ui/DataTable";
 import Field, { SelectField } from "@/components/ui/Field";
 import Modal, { FormFull, FormGrid } from "@/components/ui/Modal";
@@ -19,6 +20,7 @@ import { client, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
 import type { components } from "@/lib/api/schema";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { usePasswordPolicy, validatePasswordClient } from "@/lib/auth/password";
 import { applyServerFieldErrors } from "@/lib/forms";
 
 import styles from "./page.module.css";
@@ -29,12 +31,20 @@ type Role = components["schemas"]["RoleOut"];
 /** 레거시 페이지당 10건 패리티 */
 const PAGE_SIZE = 10;
 
+const STATUS_LABEL: Record<string, string> = {
+  active: "활성",
+  pending: "승인 대기",
+  rejected: "거절",
+};
+
 /**
- * 회원 관리(슬라이스 7) — 레거시 #users 패리티:
- * 상태 필터(승인 대기/활성) 목록(아이디·이름·이메일·역할 태그·상태), 상세(역할·
- * 보유 권한 칩), 승인 워크플로(역할 부여 + is_active=true), 역할 변경, 비활성 토글,
- * 회원 등록. 변경 성공 시 ["users"] invalidate — 목록과 TopNav 승인 대기 배지
+ * 회원 관리 — 상태 필터(승인 대기/활성/거절) 목록, 상세(가입 정보·역할·보유 권한),
+ * 승인(역할 부여 + is_active=true) · 거절(사유 기록) · 역할 변경 · 비활성 ·
+ * 임시 비밀번호 발급(비번 분실 구제) · 2단계 인증 해제(인증 앱 분실 구제) · 회원 등록.
+ *
+ * 변경 성공 시 ["users"] invalidate — 목록과 TopNav 승인 대기 배지
  * (["users","pending","count"])가 함께 갱신된다.
+ * 확인이 필요한 동작은 window.confirm 이 아니라 앱 내 ConfirmModal 을 쓴다.
  */
 export default function UsersPage() {
   const { can } = useAuth();
@@ -49,6 +59,10 @@ export default function UsersPage() {
   /** 승인(pending) 또는 역할 변경(active) 모달 대상 */
   const [roleTarget, setRoleTarget] = useState<UserRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<UserRow | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<UserRow | null>(null);
+  const [tempPwTarget, setTempPwTarget] = useState<UserRow | null>(null);
+  const [totpTarget, setTotpTarget] = useState<UserRow | null>(null);
 
   const list = useQuery({
     queryKey: ["users", "list", { page, status }],
@@ -72,14 +86,8 @@ export default function UsersPage() {
     queryClient.invalidateQueries({ queryKey: ["users"] });
   };
 
-  // 레거시 deactivateUser 패리티 — 활성 토글(비활성화)
+  // 비활성화 = 로그인 차단 + 발급된 세션 즉시 무효화(서버 token_version)
   const deactivateUser = async (u: UserRow) => {
-    if (
-      !window.confirm(
-        `"${u.username}" 계정을 비활성화할까요? 해당 사용자는 로그인할 수 없게 됩니다.`,
-      )
-    )
-      return;
     try {
       unwrap(
         await client.PUT("/api/users/{user_id}", {
@@ -87,7 +95,23 @@ export default function UsersPage() {
           body: { is_active: false },
         }),
       );
-      toast("비활성화했습니다.");
+      toast("비활성화했습니다. 해당 사용자의 기존 세션도 종료됩니다.");
+      setDeactivateTarget(null);
+      invalidateUsers();
+    } catch (err) {
+      toast(errorMessage(err), true);
+    }
+  };
+
+  const disableTotp = async (u: UserRow) => {
+    try {
+      unwrap(
+        await client.POST("/api/users/{user_id}/2fa/disable", {
+          params: { path: { user_id: u.id } },
+        }),
+      );
+      toast("2단계 인증을 해제했습니다.");
+      setTotpTarget(null);
       invalidateUsers();
     } catch (err) {
       toast(errorMessage(err), true);
@@ -98,6 +122,7 @@ export default function UsersPage() {
     { key: "username", header: "아이디", code: true },
     { key: "full_name", header: "이름", render: (u) => u.full_name || "-" },
     { key: "email", header: "이메일", render: (u) => u.email || "-" },
+    { key: "department", header: "부서", render: (u) => u.department || "-" },
     {
       key: "roles",
       header: "역할",
@@ -115,14 +140,16 @@ export default function UsersPage() {
         ),
     },
     {
-      key: "is_active",
+      key: "status",
       header: "상태",
-      render: (u) =>
-        u.is_active ? (
-          <Tag variant="both">활성</Tag>
-        ) : (
-          <Tag variant="supp">승인 대기</Tag>
-        ),
+      render: (u) => (
+        <span className={styles.roleTags}>
+          {u.status === "active" && <Tag variant="both">활성</Tag>}
+          {u.status === "pending" && <Tag variant="supp">승인 대기</Tag>}
+          {u.status === "rejected" && <Tag variant="gray">거절</Tag>}
+          {u.totp_enabled && <Tag variant="gray">2FA</Tag>}
+        </span>
+      ),
     },
   ];
 
@@ -150,6 +177,7 @@ export default function UsersPage() {
             <option value="">전체 상태</option>
             <option value="pending">승인 대기</option>
             <option value="active">활성</option>
+            <option value="rejected">거절</option>
           </select>
           <Spacer />
           {canWrite && (
@@ -179,7 +207,30 @@ export default function UsersPage() {
               >
                 상세
               </Button>
-              {canWrite && !u.is_active && (
+              {canWrite && u.status === "pending" && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRoleTarget(u);
+                    }}
+                  >
+                    승인
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRejectTarget(u);
+                    }}
+                  >
+                    거절
+                  </Button>
+                </>
+              )}
+              {canWrite && u.status === "rejected" && (
                 <Button
                   size="sm"
                   onClick={(e) => {
@@ -187,7 +238,7 @@ export default function UsersPage() {
                     setRoleTarget(u);
                   }}
                 >
-                  승인
+                  승인으로 되돌리기
                 </Button>
               )}
               {canWrite && u.is_active && (
@@ -203,11 +254,33 @@ export default function UsersPage() {
                     역할
                   </Button>
                   <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTempPwTarget(u);
+                    }}
+                  >
+                    임시비번
+                  </Button>
+                  {u.totp_enabled && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTotpTarget(u);
+                      }}
+                    >
+                      2FA 해제
+                    </Button>
+                  )}
+                  <Button
                     variant="danger"
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      void deactivateUser(u);
+                      setDeactivateTarget(u);
                     }}
                   >
                     비활성
@@ -254,7 +327,207 @@ export default function UsersPage() {
           }}
         />
       )}
+
+      {deactivateTarget && (
+        <ConfirmModal
+          title="계정 비활성화"
+          danger
+          confirmText="비활성화"
+          message={
+            <>
+              <b>{deactivateTarget.username}</b> 계정을 비활성화할까요? 해당 사용자는
+              로그인할 수 없게 되고, <b>이미 로그인된 세션도 즉시 종료</b>됩니다.
+            </>
+          }
+          onConfirm={() => deactivateUser(deactivateTarget)}
+          onClose={() => setDeactivateTarget(null)}
+        />
+      )}
+
+      {totpTarget && (
+        <ConfirmModal
+          title="2단계 인증 해제"
+          confirmText="해제"
+          message={
+            <>
+              <b>{totpTarget.username}</b> 계정의 2단계 인증을 해제할까요? 인증 앱을
+              분실해 로그인하지 못하는 사용자를 구제하는 용도입니다. 해제 후에는 비밀번호만으로
+              로그인합니다.
+            </>
+          }
+          onConfirm={() => disableTotp(totpTarget)}
+          onClose={() => setTotpTarget(null)}
+        />
+      )}
+
+      {rejectTarget && (
+        <RejectModal
+          user={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onSaved={() => {
+            setRejectTarget(null);
+            invalidateUsers();
+          }}
+        />
+      )}
+
+      {tempPwTarget && (
+        <TempPasswordModal
+          user={tempPwTarget}
+          onClose={() => setTempPwTarget(null)}
+          onIssued={invalidateUsers}
+        />
+      )}
     </section>
+  );
+}
+
+// ==================== 가입 거절 ====================
+
+/**
+ * 거절은 계정을 지우지 않고 '거절' 상태로 표시한다(이력 보존 + 같은 아이디 재가입 방지).
+ * 사유는 로그인 시도 시 본인에게 안내된다.
+ */
+function RejectModal({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: UserRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const { register, handleSubmit, formState } = useForm<{ reason: string }>({
+    defaultValues: { reason: "" },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      unwrap(
+        await client.POST("/api/users/{user_id}/reject", {
+          params: { path: { user_id: user.id } },
+          body: { reason: values.reason.trim() },
+        }),
+      );
+      toast("가입을 거절했습니다.");
+      onSaved();
+    } catch (err) {
+      toast(errorMessage(err), true);
+    }
+  });
+
+  return (
+    <Modal
+      title={`가입 거절 · ${user.username}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            취소
+          </Button>
+          <Button variant="danger" onClick={onSubmit} disabled={formState.isSubmitting}>
+            {formState.isSubmitting ? "처리 중…" : "거절"}
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={onSubmit} noValidate>
+        <FormGrid>
+          <FormFull>
+            <Field
+              label="거절 사유"
+              placeholder="로그인 시도 시 본인에게 안내됩니다"
+              error={formState.errors.reason?.message}
+              {...register("reason")}
+            />
+          </FormFull>
+        </FormGrid>
+        <button type="submit" hidden />
+      </form>
+    </Modal>
+  );
+}
+
+// ==================== 임시 비밀번호 발급 ====================
+
+/**
+ * 비밀번호 분실 구제(SMTP 미설정 환경의 재설정 경로). 평문은 응답에 딱 한 번 나오므로
+ * 화면에 표시해 관리자가 본인에게 전달한다. 발급 즉시 기존 세션이 끊기고, 사용자는 다음
+ * 로그인에서 비밀번호 변경을 강제당한다(/change-password).
+ */
+function TempPasswordModal({
+  user,
+  onClose,
+  onIssued,
+}: {
+  user: UserRow;
+  onClose: () => void;
+  onIssued: () => void;
+}) {
+  const toast = useToast();
+  const [issued, setIssued] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const issue = async () => {
+    setBusy(true);
+    try {
+      const res = unwrap(
+        await client.POST("/api/users/{user_id}/temp-password", {
+          params: { path: { user_id: user.id } },
+        }),
+      );
+      setIssued(res.temp_password);
+      onIssued();
+    } catch (err) {
+      toast(errorMessage(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={`임시 비밀번호 발급 · ${user.username}`}
+      onClose={onClose}
+      footer={
+        issued ? (
+          <Button onClick={onClose}>닫기</Button>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              취소
+            </Button>
+            <Button onClick={() => void issue()} disabled={busy}>
+              {busy ? "발급 중…" : "발급"}
+            </Button>
+          </>
+        )
+      }
+    >
+      {issued ? (
+        <div className={styles.tempPw}>
+          <p>
+            아래 임시 비밀번호를 본인에게 전달하세요. <b>지금 화면을 닫으면 다시 볼 수 없습니다.</b>
+          </p>
+          <code className={styles.tempPwCode}>{issued}</code>
+          <p className={styles.muted}>
+            사용자는 이 비밀번호로 로그인한 뒤 새 비밀번호를 설정해야 업무 화면을 쓸 수 있습니다.
+            기존 로그인 세션과 옛 비밀번호는 즉시 무효화되었습니다.
+          </p>
+        </div>
+      ) : (
+        <div className={styles.tempPw}>
+          <p>
+            <b>{user.username}</b> 계정의 비밀번호를 임시 비밀번호로 재설정할까요?
+          </p>
+          <p className={styles.muted}>
+            기존 비밀번호와 로그인 세션이 즉시 무효화됩니다. 본인이 비밀번호를 잊었을 때만
+            사용하세요.
+          </p>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -306,8 +579,26 @@ function UserDetailModal({
         <dd>{user.full_name || "-"}</dd>
         <dt>이메일</dt>
         <dd>{user.email || "-"}</dd>
+        <dt>부서</dt>
+        <dd>{user.department || "-"}</dd>
+        <dt>가입 사유</dt>
+        <dd>{user.signup_reason || "-"}</dd>
         <dt>상태</dt>
-        <dd>{user.is_active ? "활성" : "비활성"}</dd>
+        <dd>{STATUS_LABEL[user.status] ?? user.status}</dd>
+        {user.status === "rejected" && (
+          <>
+            <dt>거절 사유</dt>
+            <dd>{user.reject_reason || "-"}</dd>
+          </>
+        )}
+        <dt>2단계 인증</dt>
+        <dd>{user.totp_enabled ? "사용 중" : "사용 안 함"}</dd>
+        <dt>최근 로그인</dt>
+        <dd>
+          {user.last_login_at
+            ? new Date(user.last_login_at).toLocaleString("ko-KR")
+            : "-"}
+        </dd>
         <dt>역할</dt>
         <dd>{user.roles.map((r) => r.name).join(", ") || "-"}</dd>
       </dl>
@@ -439,7 +730,9 @@ function UserFormModal({
 }) {
   const toast = useToast();
   const roles = useRoleOptions();
-  const { register, handleSubmit, setError, formState } =
+  const policy = usePasswordPolicy();
+  const minLength = policy?.min_length ?? 10;
+  const { register, handleSubmit, setError, getValues, formState } =
     useForm<UserFormValues>({
       defaultValues: {
         username: "",
@@ -504,8 +797,13 @@ function UserFormModal({
             label="비밀번호 *"
             type="password"
             autoComplete="new-password"
+            placeholder={policy?.text}
             error={errors.password?.message}
-            {...register("password", { required: "비밀번호를 입력하세요." })}
+            {...register("password", {
+              required: "비밀번호를 입력하세요.",
+              validate: (value) =>
+                validatePasswordClient(value, minLength, getValues("username")) ?? true,
+            })}
           />
           <Field
             label="이름"

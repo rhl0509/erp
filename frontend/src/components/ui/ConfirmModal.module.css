@@ -1,0 +1,10 @@
+.message {
+  color: var(--ink-2);
+  font-size: var(--t-cap);
+  line-height: 1.7;
+}
+
+.message b {
+  font-weight: 700;
+  color: var(--ink);
+}

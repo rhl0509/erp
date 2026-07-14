@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/auth/password-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Password Policy
+         * @description 비밀번호 정책. 화면 안내·검증 문구를 서버 규칙과 한 곳에서 맞추기 위한 엔드포인트.
+         */
+        get: operations["password_policy_api_auth_password_policy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/check-username": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Username
+         * @description 가입 폼의 아이디 중복 확인. 존재 여부만 돌려주므로 남용되지 않게 IP 제한을 둔다.
+         */
+        get: operations["check_username_api_auth_check_username_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/register": {
         parameters: {
             query?: never;
@@ -41,6 +81,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh
+         * @description 세션 연장. 만료 임박 시 화면이 호출해 쿠키·토큰을 새로 받는다(재로그인 없이).
+         *     무효화된 토큰(비번 변경 등)은 get_current_user 에서 이미 걸러진다.
+         */
+        post: operations["refresh_api_auth_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/logout": {
         parameters: {
             query?: never;
@@ -54,8 +115,30 @@ export interface paths {
          * Logout
          * @description 세션 쿠키를 제거한다. JWT 는 무상태라 서버측 무효화는 없고, 쿠키 클라이언트의
          *     로그아웃은 쿠키 삭제로 이뤄진다(헤더 방식 클라이언트는 토큰 폐기로 로그아웃).
+         *     전 세션 강제 로그아웃이 필요하면 비밀번호 변경(token_version 증가)으로 이뤄진다.
          */
         post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_api_auth_me_get"];
+        /**
+         * Update My Profile
+         * @description 본인 프로필(이름·이메일·부서) 수정. 역할·활성 여부는 관리자만 바꿀 수 있다.
+         */
+        put: operations["update_my_profile_api_auth_me_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -73,6 +156,8 @@ export interface paths {
         /**
          * Change My Password
          * @description 본인 비밀번호 변경. 현재 비밀번호가 맞아야 하고, 기존과 동일하면 거부한다.
+         *     변경 즉시 token_version 을 올려 **다른 기기의 기존 세션을 전부 무효화**하고,
+         *     이 응답에는 새 토큰 쿠키를 심어 지금 쓰는 세션만 살려 둔다.
          */
         put: operations["change_my_password_api_auth_me_password_put"];
         post?: never;
@@ -82,17 +167,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/me": {
+    "/api/auth/forgot-password": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Me */
-        get: operations["me_api_auth_me_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Forgot Password
+         * @description 비밀번호 재설정 요청(아이디 또는 이메일).
+         *
+         *     응답은 계정 존재 여부와 무관하게 항상 같다(계정 열거 방지). 실제로 무엇이 일어나는지는
+         *     SMTP 설정 여부로만 갈린다:
+         *       - SMTP 설정됨  → 재설정 링크를 등록된 이메일로 발송(delivery=email)
+         *       - SMTP 미설정  → 관리자에게 임시비밀번호 발급을 요청하도록 안내(delivery=admin)
+         */
+        post: operations["forgot_password_api_auth_forgot_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description 재설정 링크의 토큰으로 비밀번호를 교체한다. 토큰은 1회용·시한부이며,
+         *     성공 시 token_version 을 올려 기존 세션을 전부 무효화한다.
+         */
+        post: operations["reset_password_api_auth_reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Totp Setup
+         * @description 2FA 설정 시작. 새 secret 을 발급해 저장하지만 아직 활성화하지 않는다
+         *     (인증 앱 코드로 /2fa/enable 을 통과해야 켜진다 — 등록 실패로 계정이 잠기지 않게).
+         */
+        post: operations["totp_setup_api_auth_2fa_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Totp Enable
+         * @description 인증 앱이 만든 코드가 맞아야 2FA 를 켠다.
+         */
+        post: operations["totp_enable_api_auth_2fa_enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Totp Disable
+         * @description 본인 2FA 해제 — 세션 탈취만으로 꺼지지 않도록 비밀번호를 다시 확인한다.
+         *     (인증 앱을 잃어버려 로그인 자체가 안 되면 관리자가 /api/users/{id}/2fa/disable 로 푼다.)
+         */
+        post: operations["totp_disable_api_auth_2fa_disable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -126,7 +302,7 @@ export interface paths {
         };
         /**
          * Pending Users Count
-         * @description 승인 대기(비활성) 회원 수. 관리자 알림 뱃지용.
+         * @description 승인 대기 회원 수. 관리자 알림 뱃지용 — 거절된 계정은 세지 않는다.
          */
         get: operations["pending_users_count_api_users_pending_count_get"];
         put?: never;
@@ -147,10 +323,75 @@ export interface paths {
         get?: never;
         /**
          * Update User
-         * @description 회원 수정. 승인은 is_active=true + role_ids 부여로 처리한다.
+         * @description 회원 수정. 승인은 is_active=true + role_ids 부여로 처리한다(거절 이력은 승인 시 해제).
+         *     비활성화하면 token_version 을 올려 그 사용자의 기존 세션을 즉시 끊는다.
          */
         put: operations["update_user_api_users__user_id__put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject User
+         * @description 가입 거절. 계정을 지우지 않고 거절로 표시한다(같은 아이디 재가입 방지 + 이력 보존).
+         *     거절된 계정은 승인 대기 목록·배지에서 빠지고, 로그인 시 사유가 안내된다.
+         */
+        post: operations["reject_user_api_users__user_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}/temp-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue Temp Password
+         * @description 임시 비밀번호 발급(비밀번호 분실 구제 — SMTP 미설정 환경의 재설정 경로).
+         *
+         *     평문은 이 응답에서 딱 한 번 나오고 DB 에는 해시만 남는다. 발급 즉시 기존 세션을
+         *     모두 끊고(token_version) 다음 로그인에서 비밀번호 변경을 강제한다(must_change_password).
+         */
+        post: operations["issue_temp_password_api_users__user_id__temp_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}/2fa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Disable Totp
+         * @description 관리자의 2FA 해제 — 인증 앱을 잃어 로그인 자체가 불가능해진 계정의 구제 경로.
+         */
+        post: operations["admin_disable_totp_api_users__user_id__2fa_disable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1342,6 +1583,12 @@ export interface components {
         };
         /** Body_login_api_auth_login_post */
         Body_login_api_auth_login_post: {
+            /**
+             * Otp
+             * @description 2단계 인증(TOTP) 6자리 코드 — 2FA 사용자만
+             * @default
+             */
+            otp: string;
             /** Grant Type */
             grant_type?: string | null;
             /** Username */
@@ -1385,6 +1632,21 @@ export interface components {
             account_name: string;
             /** Amount */
             amount: number;
+        };
+        /**
+         * ForgotPasswordIn
+         * @description 아이디 또는 이메일. 계정 존재 여부는 응답으로 알려주지 않는다(열거 방지).
+         */
+        ForgotPasswordIn: {
+            /** Identifier */
+            identifier: string;
+        };
+        /** ForgotPasswordOut */
+        ForgotPasswordOut: {
+            /** Detail */
+            detail: string;
+            /** Delivery */
+            delivery: string;
         };
         /** GLRebuildOut */
         GLRebuildOut: {
@@ -1746,6 +2008,33 @@ export interface components {
             /** Is Active */
             is_active: boolean;
             /**
+             * Status
+             * @default pending
+             */
+            status: string;
+            /**
+             * Department
+             * @default
+             */
+            department: string;
+            /**
+             * Reject Reason
+             * @default
+             */
+            reject_reason: string;
+            /**
+             * Signup Reason
+             * @default
+             */
+            signup_reason: string;
+            /**
+             * Totp Enabled
+             * @default false
+             */
+            totp_enabled: boolean;
+            /** Last Login At */
+            last_login_at?: string | null;
+            /**
              * Roles
              * @default []
              */
@@ -1755,6 +2044,11 @@ export interface components {
              * @default []
              */
             permissions: string[];
+            /**
+             * Must Change Password
+             * @default false
+             */
+            must_change_password: boolean;
         };
         /**
          * OrderLineIn
@@ -2163,6 +2457,16 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /**
+         * PasswordPolicyOut
+         * @description 비밀번호 정책. 화면 안내 문구가 서버 규칙과 갈라지지 않도록 서버가 내려준다.
+         */
+        PasswordPolicyOut: {
+            /** Min Length */
+            min_length: number;
+            /** Text */
+            text: string;
+        };
         /** PaymentCreate */
         PaymentCreate: {
             /** Partner Id */
@@ -2250,6 +2554,27 @@ export interface components {
              * @default
              */
             description: string;
+        };
+        /**
+         * ProfileUpdate
+         * @description 본인 프로필 수정(이름·이메일·부서). 역할·활성 여부는 본인이 바꿀 수 없다.
+         */
+        ProfileUpdate: {
+            /**
+             * Full Name
+             * @default
+             */
+            full_name: string;
+            /**
+             * Email
+             * @default
+             */
+            email: string;
+            /**
+             * Department
+             * @default
+             */
+            department: string;
         };
         /** PurchaseOrderCreate */
         PurchaseOrderCreate: {
@@ -2443,6 +2768,23 @@ export interface components {
              * @default
              */
             email: string;
+            /**
+             * Department
+             * @default
+             */
+            department: string;
+            /**
+             * Signup Reason
+             * @default
+             */
+            signup_reason: string;
+        };
+        /** ResetPasswordIn */
+        ResetPasswordIn: {
+            /** Token */
+            token: string;
+            /** New Password */
+            new_password: string;
         };
         /**
          * ReturnRequest
@@ -2904,6 +3246,16 @@ export interface components {
              */
             lines: components["schemas"]["TaxInvoiceLineOut"][];
         };
+        /**
+         * TempPasswordOut
+         * @description 관리자 임시비밀번호 발급 결과. 평문은 이 응답에서 한 번만 나온다(DB엔 해시만).
+         */
+        TempPasswordOut: {
+            /** Username */
+            username: string;
+            /** Temp Password */
+            temp_password: string;
+        };
         /** Token */
         Token: {
             /** Access Token */
@@ -2913,6 +3265,36 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+            /**
+             * Must Change Password
+             * @default false
+             */
+            must_change_password: boolean;
+        };
+        /** TotpCodeIn */
+        TotpCodeIn: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * TotpDisableIn
+         * @description 2FA 해제는 비밀번호로 본인을 재확인한다(세션 탈취만으로 해제되지 않게).
+         */
+        TotpDisableIn: {
+            /** Password */
+            password: string;
+        };
+        /**
+         * TotpSetupOut
+         * @description 2FA 설정 시작. secret 을 인증 앱에 등록(QR 스캔 또는 수동 입력)한 뒤 enable 로 확정.
+         */
+        TotpSetupOut: {
+            /** Secret */
+            secret: string;
+            /** Otpauth Uri */
+            otpauth_uri: string;
+            /** Qr Svg */
+            qr_svg: string;
         };
         /** TransactionItemSubtotal */
         TransactionItemSubtotal: {
@@ -3027,7 +3409,11 @@ export interface components {
             /** Balance */
             balance: number;
         };
-        /** UserCreate */
+        /**
+         * UserCreate
+         * @description 관리자 회원 등록. 비밀번호 정책은 라우터에서 validate_password 로 검증한다
+         *     (아이디 포함 여부까지 보려면 username 이 필요하고, 메시지를 필드 오류로 내려야 한다).
+         */
         UserCreate: {
             /** Username */
             username: string;
@@ -3068,10 +3454,48 @@ export interface components {
             /** Is Active */
             is_active: boolean;
             /**
+             * Status
+             * @default pending
+             */
+            status: string;
+            /**
+             * Department
+             * @default
+             */
+            department: string;
+            /**
+             * Reject Reason
+             * @default
+             */
+            reject_reason: string;
+            /**
+             * Signup Reason
+             * @default
+             */
+            signup_reason: string;
+            /**
+             * Totp Enabled
+             * @default false
+             */
+            totp_enabled: boolean;
+            /** Last Login At */
+            last_login_at?: string | null;
+            /**
              * Roles
              * @default []
              */
             roles: components["schemas"]["RoleOut"][];
+        };
+        /**
+         * UserReject
+         * @description 가입 거절. 사유는 본인에게 보여줄 수 있으므로 남긴다.
+         */
+        UserReject: {
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
         };
         /**
          * UserUpdate
@@ -3086,6 +3510,13 @@ export interface components {
             is_active?: boolean | null;
             /** Role Ids */
             role_ids?: number[] | null;
+        };
+        /** UsernameCheckOut */
+        UsernameCheckOut: {
+            /** Username */
+            username: string;
+            /** Available */
+            available: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -3163,6 +3594,57 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    password_policy_api_auth_password_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordPolicyOut"];
+                };
+            };
+        };
+    };
+    check_username_api_auth_check_username_get: {
+        parameters: {
+            query: {
+                username: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsernameCheckOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     register_api_auth_register_post: {
         parameters: {
             query?: never;
@@ -3229,6 +3711,37 @@ export interface operations {
             };
         };
     };
+    refresh_api_auth_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Token"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     logout_api_auth_logout_post: {
         parameters: {
             query?: never;
@@ -3244,6 +3757,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    me_api_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_my_profile_api_auth_me_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -3280,7 +3859,71 @@ export interface operations {
             };
         };
     };
-    me_api_auth_me_get: {
+    forgot_password_api_auth_forgot_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForgotPasswordOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_password_api_auth_reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    totp_setup_api_auth_2fa_setup_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3297,8 +3940,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MeOut"];
+                    "application/json": components["schemas"]["TotpSetupOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    totp_enable_api_auth_2fa_enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    totp_disable_api_auth_2fa_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpDisableIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3314,7 +4023,7 @@ export interface operations {
     list_users_api_users_get: {
         parameters: {
             query?: {
-                /** @description pending(승인대기)/active(활성) 필터 */
+                /** @description pending(승인대기)/active(활성)/rejected(거절) 필터 */
                 status?: string | null;
                 /** @description 페이지 번호(1부터) */
                 page?: number;
@@ -3431,6 +4140,109 @@ export interface operations {
                 "application/json": components["schemas"]["UserUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_user_api_users__user_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserReject"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_temp_password_api_users__user_id__temp_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TempPasswordOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_disable_totp_api_users__user_id__2fa_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                erp_session?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

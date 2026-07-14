@@ -52,8 +52,8 @@ def test_rbac_viewer_cannot_write(client, admin):
     roles = _ok(client.get("/api/roles", headers=admin))
     viewer_id = next(r["id"] for r in roles if r["name"] == "viewer")
     _ok(client.post("/api/users", headers=admin,
-                    json={"username": "v1", "password": "pw123456", "role_ids": [viewer_id]}))
-    tok = _ok(client.post("/api/auth/login", data={"username": "v1", "password": "pw123456"}))["access_token"]
+                    json={"username": "v1", "password": "viewerPw2026", "role_ids": [viewer_id]}))
+    tok = _ok(client.post("/api/auth/login", data={"username": "v1", "password": "viewerPw2026"}))["access_token"]
     vh = {"Authorization": f"Bearer {tok}"}
     assert client.get("/api/partners", headers=vh).status_code == 200          # 조회 가능
     assert client.post("/api/partners", headers=vh, json={"name": "x"}).status_code == 403  # 쓰기 불가

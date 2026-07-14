@@ -41,13 +41,59 @@ class User(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(100), default="")
-    email: Mapped[str] = mapped_column(String(255), default="")
+    # 이메일은 유니크(비번 재설정 대상 식별). 미입력은 빈 문자열이 아니라 NULL 로 둔다
+    # — 빈 문자열은 여러 행이 가질 수 없기 때문(UNIQUE 는 NULL 중복만 허용).
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, default=None)
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # 가입 신청 정보(승인 판단용)
+    department: Mapped[str] = mapped_column(String(100), default="")
+    signup_reason: Mapped[str] = mapped_column(String(255), default="")
+    # 거절: is_active=False 상태에서 rejected_at 이 있으면 '거절', 없으면 '승인 대기'
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reject_reason: Mapped[str] = mapped_column(String(255), default="")
+
+    # 세션·비밀번호 수명
+    # token_version: 발급 토큰에 심는 값. 비번 변경·재설정·임시비번 발급·비활성화 시
+    # 증가시키면 그 이전에 발급된 JWT 는 전부 무효가 된다(무상태 JWT 의 강제 로그아웃).
+    token_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # 2단계 인증(TOTP). secret 은 설정 시작 시 저장하고, 코드 검증에 성공해야 enabled.
+    totp_secret: Mapped[str] = mapped_column(String(64), default="")
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     roles: Mapped[list["Role"]] = relationship(
         secondary=user_roles, back_populates="users", lazy="selectin"
     )
+
+    @property
+    def status(self) -> str:
+        """pending(승인 대기) / active(활성) / rejected(거절) — is_active + rejected_at 파생."""
+        if self.is_active:
+            return "active"
+        return "rejected" if self.rejected_at else "pending"
+
+
+class PasswordResetToken(Base):
+    """비밀번호 재설정 토큰. 원문은 메일로만 나가고 DB 에는 sha256 해시만 남긴다
+    (DB 유출 시에도 토큰을 재사용할 수 없게). 사용 즉시 used_at 을 찍어 1회용으로 만든다."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Role(Base, TimestampMixin):

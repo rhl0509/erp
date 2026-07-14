@@ -55,11 +55,18 @@ app.add_middleware(RequestContextMiddleware)
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     code_map = {400: "bad_request", 401: "unauthorized", 403: "forbidden",
-                404: "not_found", 409: "conflict"}
+                404: "not_found", 409: "conflict", 422: "validation_error",
+                429: "too_many_requests"}
+    content = {"detail": exc.detail, "code": code_map.get(exc.status_code, "error"),
+               "request_id": get_request_id()}
+    # FieldError(app.errors)는 필드별 메시지를 함께 싣는다 — Pydantic 422 와 같은 형식이라
+    # 화면이 입력칸 옆에 그대로 붙일 수 있다.
+    fields = getattr(exc, "fields", None)
+    if fields:
+        content["fields"] = fields
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail, "code": code_map.get(exc.status_code, "error"),
-                 "request_id": get_request_id()},
+        content=content,
         headers=getattr(exc, "headers", None),
     )
 

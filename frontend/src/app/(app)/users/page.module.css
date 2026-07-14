@@ -21,6 +21,32 @@
   font-size: var(--t-cap);
 }
 
+/* 임시 비밀번호 발급 모달 */
+.tempPw {
+  color: var(--ink-2);
+  font-size: var(--t-cap);
+  line-height: 1.7;
+}
+
+.tempPw p {
+  margin: 0 0 var(--s3);
+}
+
+.tempPwCode {
+  display: block;
+  margin: var(--s3) 0;
+  padding: var(--s4);
+  background: var(--line-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--mono, monospace);
+  font-size: var(--t-lg, 18px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: all;
+}
+
 /* 승인 대기(비활성) 행 강조 — 레거시 tr.below-safety 재사용 패리티 */
 .pendingRow td {
   background: #f4f4f4;

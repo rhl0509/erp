@@ -4,13 +4,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
-import { client, logoutRequest, unwrap } from "@/lib/api/client";
+import { client, logoutRequest, refreshSession, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 
 export type Me = components["schemas"]["MeOut"];
@@ -49,6 +50,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const me = data ?? null;
+
+  // 세션 연장 — 서버 토큰(기본 8시간)이 사용 중에 만료돼 갑자기 튕기지 않도록,
+  // 로그인 상태에서 30분마다 쿠키를 새 만료로 다시 심는다. 실패(무효 세션)는
+  // client.ts 의 401 미들웨어가 강제 로그아웃으로 처리하므로 여기서는 무시한다.
+  useEffect(() => {
+    if (!me) return;
+    const id = setInterval(() => {
+      void refreshSession().catch(() => {});
+    }, 30 * 60_000);
+    return () => clearInterval(id);
+  }, [me]);
 
   const can = useCallback(
     (perm: string) =>
