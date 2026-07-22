@@ -38,7 +38,7 @@ export default function MePage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>내 정보</h2>
+          <h1 className={styles.title}>내 정보</h1>
           <p className={styles.subtitle}>
             계정 정보와 보안 설정(비밀번호·2단계 인증)을 관리합니다.
           </p>

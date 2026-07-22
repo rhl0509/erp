@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useRef,
   type KeyboardEvent,
   type MouseEvent,
@@ -45,6 +46,7 @@ export default function Modal({
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
     // 열릴 때: 배경 스크롤 잠금 + 첫 폼 요소 포커스(레거시 openForm 패리티).
@@ -110,9 +112,12 @@ export default function Modal({
         className={wide ? `${styles.modal} ${styles.wide}` : styles.modal}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 className={styles.title}>{title}</h3>
+        <h3 id={titleId} className={styles.title}>
+          {title}
+        </h3>
         <div className={styles.body}>{children}</div>
         {footer !== undefined && <div className={styles.foot}>{footer}</div>}
       </div>

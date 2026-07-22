@@ -265,7 +265,7 @@ export default function SalesPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>수주(판매)</h2>
+          <h1 className={styles.title}>수주(판매)</h1>
           <p className={styles.subtitle}>
             고객 수주서 작성·확정·출고 관리
           </p>
@@ -304,12 +304,13 @@ export default function SalesPage() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(so) => so.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           onRowClick={(so) => setDetailId(so.id)}
           actions={(so) => (
             // 행 클릭(상세 열기)과 겹치지 않게 버튼에서 전파를 끊는다
@@ -383,6 +384,7 @@ export default function SalesPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

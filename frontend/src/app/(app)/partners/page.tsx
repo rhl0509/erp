@@ -159,7 +159,7 @@ export default function PartnersPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>거래처 관리</h2>
+          <h1 className={styles.title}>거래처 관리</h1>
           <p className={styles.subtitle}>
             고객·공급처 마스터를 등록하고 관리합니다.
           </p>
@@ -196,12 +196,13 @@ export default function PartnersPage() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(p) => p.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           actions={(p) => (
             <>
               <Button
@@ -234,6 +235,7 @@ export default function PartnersPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>
@@ -582,10 +584,13 @@ function PartnerLedgerModal({
 
       <DataTable
         columns={columns}
-        rows={txns.isError ? [] : txns.data?.items}
+        rows={txns.data?.items}
+        error={txns.error}
+        onRetry={() => void txns.refetch()}
+        busy={txns.isFetching && !txns.isPending}
         rowKey={(t) => t.id}
         loading={txns.isPending}
-        emptyText={txns.isError ? errorMessage(txns.error) : "내역이 없습니다."}
+        emptyText={"내역이 없습니다."}
       />
       {txns.data && (
         <Pager
@@ -593,6 +598,7 @@ function PartnerLedgerModal({
           pages={txns.data.pages}
           total={txns.data.total}
           onPageChange={setPage}
+          busy={txns.isFetching && !txns.isPending}
         />
       )}
     </Modal>

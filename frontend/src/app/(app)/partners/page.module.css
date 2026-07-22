@@ -42,7 +42,7 @@
 
 .ledgerBar select {
   padding: 10px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: #fff;
   transition: border-color var(--tr), box-shadow var(--tr);

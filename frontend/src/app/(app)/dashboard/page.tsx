@@ -111,7 +111,7 @@ export default function DashboardPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>대시보드</h2>
+          <h1 className={styles.title}>대시보드</h1>
           <p className={styles.subtitle}>
             매입·매출, 채권/채무, 재고를 한눈에 확인합니다.
           </p>

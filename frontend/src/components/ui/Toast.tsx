@@ -80,16 +80,35 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className={styles.toasts} role="status" aria-live="polite">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={t.isError ? `${styles.toast} ${styles.error}` : styles.toast}
-            data-leaving={t.leaving ? "true" : undefined}
-          >
-            {t.message}
-          </div>
-        ))}
+      {/* 성공은 polite, 오류는 assertive — 한 컨테이너에 섞으면 오류도 정중하게
+          읽혀 놓친다. 자동 소멸 전에 스크린리더가 읽도록 분리한다. */}
+      <div className={styles.toasts}>
+        <div role="status" aria-live="polite" className={styles.stack}>
+          {toasts
+            .filter((t) => !t.isError)
+            .map((t) => (
+              <div
+                key={t.id}
+                className={styles.toast}
+                data-leaving={t.leaving ? "true" : undefined}
+              >
+                {t.message}
+              </div>
+            ))}
+        </div>
+        <div role="alert" aria-live="assertive" className={styles.stack}>
+          {toasts
+            .filter((t) => t.isError)
+            .map((t) => (
+              <div
+                key={t.id}
+                className={`${styles.toast} ${styles.error}`}
+                data-leaving={t.leaving ? "true" : undefined}
+              >
+                {t.message}
+              </div>
+            ))}
+        </div>
       </div>
     </ToastContext.Provider>
   );

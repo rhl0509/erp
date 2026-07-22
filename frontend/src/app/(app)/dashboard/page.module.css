@@ -90,9 +90,9 @@
 .legendSales::before {
   background: var(--ink);
 }
+/* opacity 0.5 는 흰 배경에서 실효 2.05:1 로 비텍스트 대비(3:1) 미달이었다 */
 .legendPurchase::before {
-  background: var(--muted);
-  opacity: 0.5;
+  background: var(--border-control);
 }
 
 .trendRow {
@@ -137,8 +137,7 @@
   background: var(--ink);
 }
 .barPurchase {
-  background: var(--muted);
-  opacity: 0.5;
+  background: var(--border-control);
 }
 
 .barVal {

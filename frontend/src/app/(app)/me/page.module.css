@@ -130,7 +130,7 @@
   padding: 4px 8px;
   background: var(--line-2);
   border-radius: var(--radius);
-  font-family: var(--mono, monospace);
+  font-family: var(--mono);
   font-size: var(--t-sm);
   letter-spacing: 0.06em;
   user-select: all;

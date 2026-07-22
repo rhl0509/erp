@@ -45,12 +45,14 @@
   letter-spacing: 0.05em;
 }
 
+/* 카드가 나란히 놓이면 34px 금액의 자릿수가 어긋난다 — 표와 같은 등폭 숫자로 */
 .v {
   font-size: var(--t-3xl);
   font-weight: 800;
   margin-top: var(--s2);
   letter-spacing: -0.04em;
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* index.html .stat .v small(단위 "건") 이식 */
@@ -66,9 +68,10 @@
   font-size: var(--t-lg);
 }
 
+/* KPI 카드의 보조 수치는 장식이 아니라 실제 데이터다 — 2.78:1 → 4.95:1 */
 .foot {
   margin-top: var(--s3);
   font-size: var(--t-sm);
-  color: var(--muted-2);
+  color: var(--fg-subtle);
   font-weight: 500;
 }

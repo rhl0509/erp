@@ -437,7 +437,7 @@ export default function TransactionsPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>매입/매출 내역</h2>
+          <h1 className={styles.title}>매입/매출 내역</h1>
           <p className={styles.subtitle}>
             거래처와 연동된 입고(매입)·출고(매출) 내역입니다.
           </p>
@@ -475,12 +475,13 @@ export default function TransactionsPage() {
         />
         <DataTable
           columns={periodColumns}
-          rows={periods.isError ? [] : periods.data}
+          rows={periods.data}
+          error={periods.error}
+          onRetry={() => void periods.refetch()}
+          busy={periods.isFetching && !periods.isPending}
           rowKey={(p) => p.period}
           loading={periods.isPending}
-          emptyText={
-            periods.isError ? errorMessage(periods.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
         />
       </Panel>
 
@@ -496,7 +497,10 @@ export default function TransactionsPage() {
         />
         <DataTable
           columns={partnerColumns}
-          rows={partnerSubtotals.isError ? [] : sortedPartners}
+          rows={sortedPartners}
+          error={partnerSubtotals.error}
+          onRetry={() => void partnerSubtotals.refetch()}
+          busy={partnerSubtotals.isFetching && !partnerSubtotals.isPending}
           rowKey={(p) => p.partner_id ?? "none"}
           loading={partnerSubtotals.isPending}
           emptyText={
@@ -523,7 +527,10 @@ export default function TransactionsPage() {
         />
         <DataTable
           columns={itemColumns}
-          rows={itemSubtotals.isError ? [] : sortedItems}
+          rows={sortedItems}
+          error={itemSubtotals.error}
+          onRetry={() => void itemSubtotals.refetch()}
+          busy={itemSubtotals.isFetching && !itemSubtotals.isPending}
           rowKey={(i) => i.item_id}
           loading={itemSubtotals.isPending}
           emptyText={
@@ -601,12 +608,13 @@ export default function TransactionsPage() {
         </Toolbar>
         <DataTable
           columns={listColumns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(t) => t.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           sort={sort}
           onSortChange={(next) => {
             setSort(legacySortNext(sort, next));
@@ -619,6 +627,7 @@ export default function TransactionsPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

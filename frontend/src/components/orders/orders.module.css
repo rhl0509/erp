@@ -17,7 +17,7 @@
 .lnQty,
 .lnPrice {
   padding: 9px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: var(--field);
   outline: none;

@@ -37,7 +37,7 @@
 .ghost {
   background: #fff;
   color: var(--ink);
-  border-color: var(--line);
+  border-color: var(--border-control);
 }
 @media (hover: hover) and (pointer: fine) {
   .ghost:hover {

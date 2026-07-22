@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import Button from "@/components/ui/Button";
+import { errorMessage } from "@/lib/api/errors";
 import { won } from "@/lib/format";
 
 import styles from "./DataTable.module.css";
@@ -33,8 +34,20 @@ type DataTableProps<T> = {
   rows: T[] | undefined;
   rowKey: (row: T) => string | number;
   loading?: boolean;
-  /** 빈 목록 문구(레거시 emptyRow 기본 문구) */
+  /** 빈 목록 문구(레거시 emptyRow 기본 문구) — 순수 "비어 있음"에만 쓴다 */
   emptyText?: string;
+  /**
+   * 조회 실패. 지정하면 빈 상태가 아니라 오류 상태로 렌더한다.
+   * (에러를 emptyText 에 넣으면 "데이터 없음"과 구분되지 않는다)
+   */
+  error?: unknown;
+  /** 오류 상태의 "다시 시도" — 보통 query.refetch */
+  onRetry?: () => void;
+  /**
+   * 이미 표시된 데이터를 유지한 채 재조회 중(keepPreviousData).
+   * 페이지 이동·필터 변경이 먹혔는지 알 수 있게 표시하고 중복 클릭을 막는다.
+   */
+  busy?: boolean;
   /** 행 우측 액션 슬롯(레거시 .row-actions) — 지정 시 빈 헤더 열이 추가된다 */
   actions?: (row: T) => ReactNode;
   onRowClick?: (row: T) => void;
@@ -57,6 +70,9 @@ export default function DataTable<T>({
   rowKey,
   loading = false,
   emptyText = "데이터가 없습니다.",
+  error,
+  onRetry,
+  busy = false,
   actions,
   onRowClick,
   rowClassName,
@@ -81,7 +97,16 @@ export default function DataTable<T>({
   };
 
   return (
-    <table className={styles.table}>
+    <div
+      className={styles.tableScroll}
+      tabIndex={0}
+      role="region"
+      aria-label="데이터 표"
+    >
+      <table
+        className={busy ? `${styles.table} ${styles.busy}` : styles.table}
+        aria-busy={busy || undefined}
+      >
       <thead>
         <tr>
           {columns.map((col) => {
@@ -100,7 +125,6 @@ export default function DataTable<T>({
               <th
                 key={col.key}
                 className={thCls || undefined}
-                onClick={sortable ? () => handleSort(col) : undefined}
                 aria-sort={
                   activeOrder === undefined
                     ? undefined
@@ -109,15 +133,24 @@ export default function DataTable<T>({
                       : "descending"
                 }
               >
-                {col.header}
-                {sortable && (
-                  <span className={styles.sortInd} aria-hidden="true">
-                    {activeOrder === undefined
-                      ? ""
-                      : activeOrder === "asc"
-                        ? "▲"
-                        : "▼"}
-                  </span>
+                {sortable ? (
+                  // th 클릭은 키보드로 도달할 수 없다 — 실제 조작은 button 이 받는다
+                  <button
+                    type="button"
+                    className={styles.sortBtn}
+                    onClick={() => handleSort(col)}
+                  >
+                    {col.header}
+                    <span className={styles.sortInd} aria-hidden="true">
+                      {activeOrder === undefined
+                        ? "↕"
+                        : activeOrder === "asc"
+                          ? "▲"
+                          : "▼"}
+                    </span>
+                  </button>
+                ) : (
+                  col.header
                 )}
               </th>
             );
@@ -126,7 +159,18 @@ export default function DataTable<T>({
         </tr>
       </thead>
       <tbody>
-        {loading && !rows ? (
+        {error !== undefined && error !== null ? (
+          <tr>
+            <td className={styles.errorCell} colSpan={colCount}>
+              <div className={styles.errorMsg}>⚠ {errorMessage(error)}</div>
+              {onRetry && (
+                <Button variant="ghost" size="sm" onClick={onRetry}>
+                  다시 시도
+                </Button>
+              )}
+            </td>
+          </tr>
+        ) : loading && !rows ? (
           <tr>
             <td className={styles.loading} colSpan={colCount}>
               불러오는 중…
@@ -175,7 +219,8 @@ export default function DataTable<T>({
           })
         )}
       </tbody>
-    </table>
+      </table>
+    </div>
   );
 }
 
@@ -188,11 +233,14 @@ export function Pager({
   pages,
   total,
   onPageChange,
+  busy = false,
 }: {
   page: number;
   pages: number;
   total: number;
   onPageChange: (page: number) => void;
+  /** 재조회 중 — 이중 클릭으로 페이지를 건너뛰지 않게 막는다 */
+  busy?: boolean;
 }) {
   return (
     <div className={styles.pager}>
@@ -202,7 +250,7 @@ export function Pager({
       <Button
         variant="ghost"
         size="sm"
-        disabled={page <= 1}
+        disabled={busy || page <= 1}
         onClick={() => onPageChange(Math.max(1, page - 1))}
       >
         이전
@@ -210,7 +258,7 @@ export function Pager({
       <Button
         variant="ghost"
         size="sm"
-        disabled={page >= pages}
+        disabled={busy || page >= pages}
         onClick={() => onPageChange(page + 1)}
       >
         다음

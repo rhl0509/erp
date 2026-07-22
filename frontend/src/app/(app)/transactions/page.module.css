@@ -36,7 +36,7 @@
 /* 기간별 합계 패널 머리의 월별/일별 셀렉트(레거시 #txnGroupBy 인라인 스타일 패리티) */
 .headSelect {
   padding: 10px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: #fff;
   transition: border-color var(--tr), box-shadow var(--tr);
@@ -50,7 +50,7 @@
 /* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링하므로 여기서 맞춘다) */
 .dateInput {
   padding: 9px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: var(--field);
   transition: border-color var(--tr), box-shadow var(--tr);

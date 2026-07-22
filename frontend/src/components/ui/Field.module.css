@@ -17,7 +17,7 @@
 .field select {
   width: 100%;
   padding: 13px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: var(--field);
   outline: none;
@@ -32,10 +32,24 @@
   box-shadow: var(--ring);
 }
 
+/* 안내문(--muted)과 위계가 겹치지 않게 굵기를 올리고 기호로 에러임을 명시 */
 .fldErr {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--t-sm);
   margin-top: 4px;
-  min-height: 14px;
+  min-height: 18px;
+  line-height: 1.4;
+}
+.fldErr:not(:empty)::before {
+  content: "⚠ ";
+}
+
+/* 색 없이 두께로 상태를 준다 — 총 높이는 패딩으로 보정해 유지 */
+.field input[aria-invalid="true"],
+.field select[aria-invalid="true"] {
+  border-color: var(--ink);
+  border-width: 2px;
+  padding: 12px 11px;
+  background-color: #fff;
 }

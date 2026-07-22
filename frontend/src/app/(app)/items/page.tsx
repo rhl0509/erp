@@ -186,7 +186,7 @@ export default function ItemsPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>품목 관리</h2>
+          <h1 className={styles.title}>품목 관리</h1>
           <p className={styles.subtitle}>
             제품·원자재·서비스 품목 마스터를 관리합니다.
           </p>
@@ -223,12 +223,13 @@ export default function ItemsPage() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(it) => it.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           actions={
             canWrite
               ? (it) => (
@@ -258,6 +259,7 @@ export default function ItemsPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

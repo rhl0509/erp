@@ -177,7 +177,7 @@ export default function UsersPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>회원 관리</h2>
+          <h1 className={styles.title}>회원 관리</h1>
           <p className={styles.subtitle}>
             시스템 사용자와 역할·권한을 조회합니다.
           </p>
@@ -207,12 +207,13 @@ export default function UsersPage() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(u) => u.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           rowClassName={(u) => (u.is_active ? undefined : styles.pendingRow)}
           onRowClick={(u) => setDetailTarget(u)}
           actions={(u) => (
@@ -316,6 +317,7 @@ export default function UsersPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

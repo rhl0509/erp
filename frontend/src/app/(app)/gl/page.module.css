@@ -38,7 +38,7 @@
 /* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링 — transactions 와 동일 규칙) */
 .dateInput {
   padding: 9px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: var(--field);
   transition: border-color var(--tr), box-shadow var(--tr);
@@ -79,8 +79,17 @@
 }
 
 /* 재대사 불일치 값 강조(모노크롬 — 굵게) */
+/* 합계 행(.totalRow td)이 이미 800 이라 그 안에서는 완전히 무표시였다 —
+   차대 불일치는 회계에서 가장 먼저 보여야 하는 신호다. */
 .mismatch {
   font-weight: 800;
+  background: var(--ink);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: var(--radius);
+}
+.mismatch::before {
+  content: "⚠ ";
 }
 
 /* 모달 로딩/오류 문구(payments modalNote 관례) */
@@ -173,7 +182,7 @@
 .removeBtn {
   width: 28px;
   height: 28px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background: var(--field);
   color: var(--muted);

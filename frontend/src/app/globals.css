@@ -5,13 +5,18 @@
    — app/static/index.html :root 토큰 1:1 이식 (다크모드 없음)
    ────────────────────────────────────────────── */
 :root {
+  color-scheme: light; /* 라이트 전용 — OS 다크에서 날짜 팝업·스크롤바가 뒤집히지 않게 */
   /* color */
   --bg: #ffffff;
   --card: #ffffff;
   --ink: #000000;
   --ink-2: #1a1a1a;
   --muted: #6b6b6b;
-  --muted-2: #9b9b9b;
+  /* --muted-2 는 검정 표면(topbar) 위에서 7.56:1 로 통과하지만 흰 배경에선
+     2.78:1 이라 본문에 쓸 수 없다. 용도를 갈라 둔다. */
+  --muted-2: #9b9b9b; /* 검정 표면 위 보조 텍스트 · 비활성(WCAG 1.4.3 예외) 전용 */
+  --fg-subtle: #707070; /* 흰 배경 위 11~13px 보조 텍스트 — 4.95:1 (AA) */
+  --border-control: #8f8f8f; /* 조작 가능한 컨트롤 경계 — 3.23:1 (WCAG 1.4.11) */
   --brand: #000000;
   --brand-d: #262626;
   --line: #e8e8e8;
@@ -45,8 +50,14 @@
   /* misc */
   --radius: 4px;
   --pill: 999px;
+  /* me/users 의 var(--mono) 가 미정의라 OS 기본 monospace 로 흘러가고 있었다.
+     임시 비밀번호·2FA 시크릿은 0/O·1/l 구분이 중요하다. */
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "D2Coding",
+    monospace;
   --tr: 0.13s ease; /* 호버·색 전환 전용 — 등장/퇴장에는 쓰지 않는다 */
-  --ring: 0 0 0 3px rgba(0, 0, 0, 0.1);
+  /* 0.1 은 흰 배경에서 약 1.2:1 로 사실상 안 보인다. outline 을 끈 컨트롤이
+     9곳 있어 이 링이 유일한 포커스 단서가 되므로 0.28 로 올린다. */
+  --ring: 0 0 0 3px rgba(0, 0, 0, 0.28);
   /* motion — 요소별 예산(UI 300ms 미만) */
   --dur-press: 160ms; /* 눌림 피드백 100~160ms */
   --dur-menu: 200ms; /* 토스트·작은 팝오버 */
@@ -57,6 +68,24 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* sticky topbar(60px)가 Tab 이동으로 스크롤된 포커스를 덮지 않게 (WCAG 2.4.11) */
+html {
+  scroll-padding-top: 72px;
+}
+
+/* 스크린리더 전용 — 시각적으로 감추되 읽히게 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 body {

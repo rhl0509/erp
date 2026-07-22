@@ -38,8 +38,14 @@ export default function AppShellLayout({ children }: { children: ReactNode }) {
 
   return (
     <>
+      {/* 메뉴 14개 + 사용자 + 로그아웃을 Tab 16번 지나야 본문에 닿던 것을 건너뛴다 */}
+      <a href="#main" className={styles.skipLink}>
+        본문 바로가기
+      </a>
       <TopNav />
-      <main className={styles.container}>{children}</main>
+      <main id="main" tabIndex={-1} className={styles.container}>
+        {children}
+      </main>
     </>
   );
 }

@@ -8,7 +8,6 @@ import DataTable, { type Column } from "@/components/ui/DataTable";
 import { Panel, Spacer, Toolbar } from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import { client, unwrap } from "@/lib/api/client";
-import { errorMessage } from "@/lib/api/errors";
 import type { components } from "@/lib/api/schema";
 import { won } from "@/lib/format";
 
@@ -131,7 +130,7 @@ export default function AgingPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>채권/채무 연령분석</h2>
+          <h1 className={styles.title}>채권/채무 연령분석</h1>
           <p className={styles.subtitle}>
             청구 경과일 구간별 미결제 잔액(Aging)을 확인합니다.
           </p>
@@ -198,12 +197,13 @@ export default function AgingPage() {
         </Toolbar>
         <DataTable
           columns={columns}
-          rows={aging.isError ? [] : rows}
+          rows={rows}
+          error={aging.error}
+          onRetry={() => void aging.refetch()}
+          busy={aging.isFetching && !aging.isPending}
           rowKey={(b) => b.partner_id}
           loading={aging.isPending}
-          emptyText={
-            aging.isError ? errorMessage(aging.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           rowClassName={(b) =>
             b.partner_id === TOTAL_ROW_ID ? styles.totalRow : undefined
           }

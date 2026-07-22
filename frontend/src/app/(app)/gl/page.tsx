@@ -106,7 +106,7 @@ export default function GlPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>총계정원장</h2>
+          <h1 className={styles.title}>총계정원장</h1>
           <p className={styles.subtitle}>
             복식부기 전표(GL) — 시산표 · 분개장 · 계정별원장 · 손익계산서 · 재무상태표 · 기간 마감
           </p>
@@ -276,10 +276,13 @@ function PeriodsView() {
 
       <DataTable
         columns={columns}
-        rows={periods.isError ? [] : rows}
+        rows={rows}
+        error={periods.error}
+        onRetry={() => void periods.refetch()}
+        busy={periods.isFetching && !periods.isPending}
         rowKey={(p) => p.period}
         loading={periods.isPending}
-        emptyText={periods.isError ? errorMessage(periods.error) : "회계기간이 없습니다."}
+        emptyText={"회계기간이 없습니다."}
         actions={(p) => (
           <>
             {canClose && p.status !== "closed" && p.period === data?.next_closable && (
@@ -484,12 +487,13 @@ function TrialBalanceView() {
         />
         <DataTable
           columns={columns}
-          rows={trial.isError ? [] : rows}
+          rows={rows}
+          error={trial.error}
+          onRetry={() => void trial.refetch()}
+          busy={trial.isFetching && !trial.isPending}
           rowKey={(r) => r.account_code}
           loading={trial.isPending}
-          emptyText={
-            trial.isError ? errorMessage(trial.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           rowClassName={(r) =>
             isTotal(r)
               ? data?.balanced
@@ -671,13 +675,28 @@ function JournalView() {
         </Toolbar>
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(e) => e.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           onRowClick={(e) => setDetailId(e.id)}
+          // 행 클릭만 있으면 키보드로 전표 상세에 닿을 수 없다
+          // (다른 화면은 이미 "상세" 버튼을 함께 제공한다)
+          actions={(e) => (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                setDetailId(e.id);
+              }}
+            >
+              상세
+            </Button>
+          )}
         />
         {list.data && (
           <Pager
@@ -685,6 +704,7 @@ function JournalView() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>
@@ -1061,15 +1081,31 @@ function LedgerView() {
         ) : (
           <DataTable
             columns={columns}
-            rows={ledger.isError ? [] : rows}
+            rows={rows}
+            error={ledger.error}
+            onRetry={() => void ledger.refetch()}
+            busy={ledger.isFetching && !ledger.isPending}
             rowKey={(r) => r.key}
             loading={ledger.isPending}
-            emptyText={
-              ledger.isError ? errorMessage(ledger.error) : "데이터가 없습니다."
-            }
+            emptyText={"데이터가 없습니다."}
             onRowClick={(r) => {
               if (r.entryId !== null) setDetailId(r.entryId);
             }}
+            // 키보드 경로 — 행 클릭은 마우스 전용이다
+            actions={(r) =>
+              r.entryId !== null ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    setDetailId(r.entryId as number);
+                  }}
+                >
+                  전표
+                </Button>
+              ) : null
+            }
             rowClassName={(r) =>
               r.kind === "total"
                 ? styles.totalRow

@@ -9,7 +9,6 @@ import Modal from "@/components/ui/Modal";
 import { Panel, Spacer, Toolbar } from "@/components/ui/Panel";
 import Tag, { type TagVariant } from "@/components/ui/Tag";
 import { client, unwrap } from "@/lib/api/client";
-import { errorMessage } from "@/lib/api/errors";
 import type { components } from "@/lib/api/schema";
 
 import styles from "./page.module.css";
@@ -139,7 +138,7 @@ export default function AuditPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>감사 로그</h2>
+          <h1 className={styles.title}>감사 로그</h1>
           <p className={styles.subtitle}>
             등록·수정·삭제·승인 등 변경 이력을 조회합니다.
           </p>
@@ -210,12 +209,13 @@ export default function AuditPage() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(a) => a.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           onRowClick={(a) => setDetail(a)}
           actions={(a) => (
             <Button
@@ -236,6 +236,7 @@ export default function AuditPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

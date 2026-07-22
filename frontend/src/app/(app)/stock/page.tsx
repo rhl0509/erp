@@ -323,7 +323,7 @@ export default function StockPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>재고 관리</h2>
+          <h1 className={styles.title}>재고 관리</h1>
           <p className={styles.subtitle}>
             품목별 현재고와 입출고 내역을 관리합니다.
           </p>
@@ -350,7 +350,10 @@ export default function StockPage() {
         />
         <DataTable
           columns={alertColumns}
-          rows={alerts.isError ? [] : alerts.data?.items}
+          rows={alerts.data?.items}
+          error={alerts.error}
+          onRetry={() => void alerts.refetch()}
+          busy={alerts.isFetching && !alerts.isPending}
           rowKey={(x) => x.item_id}
           loading={alerts.isPending}
           emptyText={
@@ -366,6 +369,7 @@ export default function StockPage() {
             pages={alerts.data.pages}
             total={alerts.data.total}
             onPageChange={setSaPage}
+            busy={alerts.isFetching && !alerts.isPending}
           />
         )}
       </Panel>
@@ -403,12 +407,13 @@ export default function StockPage() {
         </Toolbar>
         <DataTable
           columns={levelColumns}
-          rows={levels.isError ? [] : levels.data?.items}
+          rows={levels.data?.items}
+          error={levels.error}
+          onRetry={() => void levels.refetch()}
+          busy={levels.isFetching && !levels.isPending}
           rowKey={(x) => x.item_id}
           loading={levels.isPending}
-          emptyText={
-            levels.isError ? errorMessage(levels.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           rowClassName={(x) =>
             x.shortage > 0 ? styles.belowSafety : undefined
           }
@@ -419,6 +424,7 @@ export default function StockPage() {
             pages={levels.data.pages}
             total={levels.data.total}
             onPageChange={setSlPage}
+            busy={levels.isFetching && !levels.isPending}
           />
         )}
       </Panel>
@@ -471,7 +477,10 @@ export default function StockPage() {
         </Toolbar>
         <DataTable
           columns={movementColumns}
-          rows={movements.isError ? [] : movements.data?.items}
+          rows={movements.data?.items}
+          error={movements.error}
+          onRetry={() => void movements.refetch()}
+          busy={movements.isFetching && !movements.isPending}
           rowKey={(m) => m.id}
           loading={movements.isPending}
           emptyText={
@@ -502,6 +511,7 @@ export default function StockPage() {
             pages={movements.data.pages}
             total={movements.data.total}
             onPageChange={setSmPage}
+            busy={movements.isFetching && !movements.isPending}
           />
         )}
       </Panel>

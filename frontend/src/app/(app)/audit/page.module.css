@@ -28,7 +28,7 @@
 /* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링 — transactions 와 동일 규칙) */
 .dateInput {
   padding: 9px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: var(--field);
   transition: border-color var(--tr), box-shadow var(--tr);

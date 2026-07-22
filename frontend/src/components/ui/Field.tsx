@@ -21,11 +21,21 @@ type FieldProps = InputHTMLAttributes<HTMLInputElement> & {
 export default function Field({ label, error, id, ...rest }: FieldProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
+  const errId = `${inputId}-err`;
   return (
     <div className={styles.field}>
       <label htmlFor={inputId}>{label}</label>
-      <input id={inputId} aria-invalid={!!error || undefined} {...rest} />
-      {error !== undefined && <div className={styles.fldErr}>{error}</div>}
+      <input
+        id={inputId}
+        aria-invalid={!!error || undefined}
+        // 연결이 없으면 스크린리더가 "유효하지 않음"만 읽고 이유는 읽지 않는다
+        aria-describedby={error ? errId : undefined}
+        {...rest}
+      />
+      {/* 항상 렌더한다 — 조건부 렌더면 검증 순간 아래 필드가 전부 밀린다 */}
+      <div id={errId} className={styles.fldErr}>
+        {error ?? ""}
+      </div>
     </div>
   );
 }
@@ -48,17 +58,25 @@ export function SelectField({
 }: SelectFieldProps) {
   const autoId = useId();
   const selectId = id ?? autoId;
+  const errId = `${selectId}-err`;
   return (
     <div className={styles.field}>
       <label htmlFor={selectId}>{label}</label>
-      <select id={selectId} aria-invalid={!!error || undefined} {...rest}>
+      <select
+        id={selectId}
+        aria-invalid={!!error || undefined}
+        aria-describedby={error ? errId : undefined}
+        {...rest}
+      >
         {options.map(([value, text]) => (
           <option key={value} value={value}>
             {text}
           </option>
         ))}
       </select>
-      {error !== undefined && <div className={styles.fldErr}>{error}</div>}
+      <div id={errId} className={styles.fldErr}>
+        {error ?? ""}
+      </div>
     </div>
   );
 }

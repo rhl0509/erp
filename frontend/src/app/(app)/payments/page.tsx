@@ -223,7 +223,7 @@ function PaymentsContent() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>결제 / 미수·미지급</h2>
+          <h1 className={styles.title}>결제 / 미수·미지급</h1>
           <p className={styles.subtitle}>지급(AP)·수금(AR) 기록과 거래처 잔액</p>
         </div>
       </div>
@@ -344,12 +344,13 @@ function PaymentsContent() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(p) => p.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           actions={
             canWrite
               ? (p) => (
@@ -370,6 +371,7 @@ function PaymentsContent() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

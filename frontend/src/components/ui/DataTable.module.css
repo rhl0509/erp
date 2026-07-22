@@ -1,7 +1,28 @@
 /* index.html 테이블/페이저 CSS 이식 (th/td, .num, td.code, .empty, .loading, .pager) */
+
+/* 열이 많은 표(입출고·시산표)가 컨테이너를 넘칠 때 잘리지 않고 가로 스크롤된다.
+   tabIndex=0 이 붙어 있어 키보드로도 스크롤할 수 있다. */
+.tableScroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tableScroll:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
+}
+
+/* 재조회 중 — 옛 데이터를 보여주되 갱신 중임을 알리고 중복 클릭을 막는다 */
+.busy tbody {
+  opacity: 0.45;
+  transition: opacity var(--tr);
+}
+.busy {
+  pointer-events: none;
 }
 
 .table th,
@@ -55,20 +76,45 @@ th.num {
 }
 
 th.sortable {
+  padding: 0;
+}
+
+/* 정렬 조작은 button 이 받는다 — th onClick 은 키보드로 도달 불가였다 */
+.sortBtn {
+  all: unset;
+  box-sizing: border-box;
   cursor: pointer;
   user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 24px;
+  padding: 13px var(--s4);
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+th.num .sortBtn {
+  justify-content: flex-end;
+}
+.sortBtn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  th.sortable:hover {
+  .sortBtn:hover {
     color: var(--ink);
   }
 }
 
+/* 9px + 2.66:1 이던 것을 11px + --fg-subtle(4.95:1)로 */
 .sortInd {
   margin-left: 4px;
-  font-size: 9px;
-  color: var(--muted-2);
+  font-size: var(--t-xs);
+  color: var(--fg-subtle);
 }
 
 .empty {
@@ -80,7 +126,20 @@ th.sortable {
 .loading {
   padding: var(--s7) var(--s4);
   text-align: center;
-  color: var(--muted-2);
+  color: var(--fg-subtle);
+}
+
+/* 조회 실패는 빈 상태와 구분되어야 한다 — 회색 한 줄로 위장하지 않는다 */
+.errorCell {
+  padding: var(--s7) var(--s4);
+  text-align: center;
+  background: var(--surface-2);
+  border-top: 2px solid var(--ink);
+  white-space: normal;
+}
+.errorMsg {
+  font-weight: 700;
+  margin-bottom: var(--s3);
 }
 
 .rowActions {

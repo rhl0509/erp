@@ -41,8 +41,17 @@
 }
 
 /* 여신 가용액 음수(한도 초과) 강조 — 레거시 인라인 var(--danger,#c00) 패리티 */
+/* --danger 가 #000 으로 정의돼 있어 폴백 #c00 은 발동한 적이 없다 —
+   여신 한도 초과가 정상 금액과 픽셀 단위로 동일했다. 반전 칩 + 부호로 표시한다. */
 .negative {
-  color: var(--danger, #c00);
+  color: #fff;
+  background: var(--ink);
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  font-weight: 700;
+}
+.negative::before {
+  content: "▼ ";
 }
 
 /* 구분 열의 문서 귀속 표시(레거시 span.muted 패리티) */
@@ -53,7 +62,7 @@
 /* 기간 필터 date 입력(Toolbar 는 text/select 만 스타일링 — transactions 와 동일 규칙) */
 .dateInput {
   padding: 9px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   background-color: var(--field);
   transition: border-color var(--tr), box-shadow var(--tr);

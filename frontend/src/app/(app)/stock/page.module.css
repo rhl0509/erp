@@ -33,9 +33,17 @@
 }
 
 /* 안전재고 미달 행(레거시 tr.below-safety td) */
+/* #f4f4f4 배경은 흰 바탕 대비 1.10:1 이라 사실상 안 보였고, 행 호버(--field)보다
+   진해서 호버 반응까지 삼켰다. 색을 늘리지 않고 좌측 마커 + 기호로 바꾼다. */
 .belowSafety td {
-  background: #f4f4f4;
-  font-weight: 600;
+  font-weight: 700;
+}
+.belowSafety td:first-child {
+  box-shadow: inset 4px 0 0 0 var(--ink);
+  padding-left: calc(var(--s4) + 4px);
+}
+.belowSafety td:first-child::before {
+  content: "⚠ ";
 }
 
 /* 모달 로딩/안내 문구 */

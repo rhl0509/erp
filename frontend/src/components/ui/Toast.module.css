@@ -7,6 +7,17 @@
   display: flex;
   flex-direction: column;
   gap: var(--s3);
+  max-width: min(420px, calc(100vw - var(--s6)));
+  pointer-events: none; /* 토스트가 아래 페이저 클릭을 가로채지 않게 */
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.stack:empty {
+  display: none;
 }
 
 .toast {
@@ -18,6 +29,7 @@
   border-radius: var(--radius);
   min-width: 240px;
   font-size: var(--t-cap);
+  pointer-events: auto;
   /* keyframes 가 아니라 transition — 저장 직후 토스트가 연달아 뜰 때
      진행 중인 모션이 처음부터 다시 시작하지 않고 재타깃된다 */
   opacity: 1;
@@ -40,9 +52,18 @@
   pointer-events: none;
 }
 
+/* 이전에는 .toast 와 선언이 완전히 같아 오류가 성공과 픽셀 단위로 동일했다.
+   색을 늘리지 않고 반전 + 기호로 이중 부호화한다(WCAG 1.4.1). */
 .error {
-  border-left-color: #fff;
-  background: #000;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-left: 4px solid var(--ink);
+  font-weight: 700;
+}
+.error::before {
+  content: "⚠";
+  margin-right: var(--s2);
 }
 
 /* 이동만 빼고 페이드는 남긴다 */

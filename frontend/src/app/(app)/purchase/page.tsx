@@ -262,7 +262,7 @@ export default function PurchasePage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>발주(구매)</h2>
+          <h1 className={styles.title}>발주(구매)</h1>
           <p className={styles.subtitle}>
             공급처 발주서 작성·확정·입고 관리
           </p>
@@ -301,12 +301,13 @@ export default function PurchasePage() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(po) => po.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           onRowClick={(po) => setDetailId(po.id)}
           actions={(po) => (
             // 행 클릭(상세 열기)과 겹치지 않게 버튼에서 전파를 끊는다
@@ -380,6 +381,7 @@ export default function PurchasePage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

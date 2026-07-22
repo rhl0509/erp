@@ -5,6 +5,30 @@
   padding: var(--s8) var(--s6) var(--s9);
 }
 
+/* 본문 바로가기 — 평소엔 화면 밖, 포커스되면 좌상단에 나타난다 */
+.skipLink {
+  position: absolute;
+  left: var(--s4);
+  top: -100px;
+  z-index: 100;
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top var(--dur-menu) var(--ease-out);
+}
+.skipLink:focus {
+  top: var(--s2);
+}
+
+/* 본문 자체에는 포커스 링을 그리지 않는다(skip link 로 진입할 때만 포커스된다) */
+.container:focus {
+  outline: none;
+}
+
 /* me 확인 중 빈 셸 — topbar 높이만큼 자리를 잡아 플리커를 줄인다 */
 .loading {
   min-height: 100vh;

@@ -151,7 +151,7 @@ export default function WarehousesPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>창고 관리</h2>
+          <h1 className={styles.title}>창고 관리</h1>
           <p className={styles.subtitle}>
             다중창고 마스터를 관리합니다. 기본창고는 항상 1개이며 비활성화할 수
             없고, 다른 창고를 기본으로 지정해 교체합니다.
@@ -185,12 +185,13 @@ export default function WarehousesPage() {
 
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(w) => w.id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
           actions={
             canWrite
               ? (w) => (
@@ -214,6 +215,7 @@ export default function WarehousesPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>

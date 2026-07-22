@@ -7,7 +7,6 @@ import DataTable, { Pager, type Column } from "@/components/ui/DataTable";
 import { Panel, Toolbar } from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import { client, unwrap } from "@/lib/api/client";
-import { errorMessage } from "@/lib/api/errors";
 import type { components } from "@/lib/api/schema";
 import { won } from "@/lib/format";
 
@@ -125,7 +124,7 @@ export default function ValuationPage() {
     <section>
       <div className={styles.pageHead}>
         <div>
-          <h2 className={styles.title}>재고평가 / 손익</h2>
+          <h1 className={styles.title}>재고평가 / 손익</h1>
           <p className={styles.subtitle}>
             이동평균 원가 기준 재고평가액과 매출총이익
           </p>
@@ -185,12 +184,13 @@ export default function ValuationPage() {
         </Toolbar>
         <DataTable
           columns={columns}
-          rows={list.isError ? [] : list.data?.items}
+          rows={list.data?.items}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          busy={list.isFetching && !list.isPending}
           rowKey={(v) => v.item_id}
           loading={list.isPending}
-          emptyText={
-            list.isError ? errorMessage(list.error) : "데이터가 없습니다."
-          }
+          emptyText={"데이터가 없습니다."}
         />
         {list.data && (
           <Pager
@@ -198,6 +198,7 @@ export default function ValuationPage() {
             pages={list.data.pages}
             total={list.data.total}
             onPageChange={setPage}
+            busy={list.isFetching && !list.isPending}
           />
         )}
       </Panel>
