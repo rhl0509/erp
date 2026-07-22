@@ -53,11 +53,15 @@
   white-space: nowrap;
   transition: background var(--tr), color var(--tr);
 }
-.navLink:hover {
-  background: #1f1f1f;
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .navLink:hover {
+    background: #1f1f1f;
+    color: #fff;
+  }
 }
+/* 메뉴 이동은 고빈도 동작이라 활성 전환은 즉각 반영한다 */
 .navLink.active {
+  transition: none;
   background: #fff;
   color: #000;
 }
@@ -108,9 +112,11 @@
 .whoBtn b {
   color: #fff;
 }
-.whoBtn:hover {
-  background: #1f1f1f;
-  border-color: #5a5a5a;
+@media (hover: hover) and (pointer: fine) {
+  .whoBtn:hover {
+    background: #1f1f1f;
+    border-color: #5a5a5a;
+  }
 }
 /* 레거시 .who-btn.active — /me 페이지에 있을 때 */
 .whoBtn.active {
@@ -128,8 +134,10 @@
   color: #fff;
   border-color: #3a3a3a;
 }
-.topbar .logoutBtn:hover {
-  background: #fff;
-  color: #000;
-  border-color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .topbar .logoutBtn:hover {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+  }
 }

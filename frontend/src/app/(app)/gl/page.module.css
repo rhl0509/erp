@@ -182,9 +182,11 @@
   transition: border-color var(--tr), color var(--tr);
 }
 
-.removeBtn:hover:not(:disabled) {
-  border-color: var(--ink);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .removeBtn:hover:not(:disabled) {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
 }
 
 .removeBtn:disabled {

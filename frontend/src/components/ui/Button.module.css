@@ -9,19 +9,24 @@
   color: #fff;
   letter-spacing: -0.01em;
   transition: background var(--tr), color var(--tr), border-color var(--tr),
-    transform var(--tr);
+    transform var(--dur-press) var(--ease-out);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   white-space: nowrap;
 }
-.btn:hover {
-  background: var(--brand-d);
-  border-color: var(--brand-d);
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    background: var(--brand-d);
+    border-color: var(--brand-d);
+  }
 }
+/* 비대칭 타이밍: 누름은 즉각(0s), 뗌만 160ms로 풀린다.
+   1px은 서브픽셀에 묻혀 지각되지 않아 2px로 올렸다(직각·플랫 성격 유지 — scale 대신 translate). */
 .btn:active {
-  transform: translateY(1px);
+  transform: translateY(2px);
+  transition-duration: 0s;
 }
 
 .block {
@@ -34,9 +39,11 @@
   color: var(--ink);
   border-color: var(--line);
 }
-.ghost:hover {
-  background: var(--field);
-  border-color: #cfcfcf;
+@media (hover: hover) and (pointer: fine) {
+  .ghost:hover {
+    background: var(--field);
+    border-color: #cfcfcf;
+  }
 }
 
 .danger {
@@ -44,9 +51,11 @@
   color: var(--ink);
   border-color: var(--line-d);
 }
-.danger:hover {
-  background: var(--danger);
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .danger:hover {
+    background: var(--danger);
+    color: #fff;
+  }
 }
 
 .sm {
@@ -58,4 +67,11 @@
 .btn[disabled] {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* 이동만 뺀다 — 배경·색 전환은 남겨 눌림이 읽히게 한다 */
+@media (prefers-reduced-motion: reduce) {
+  .btn:active {
+    transform: none;
+  }
 }

@@ -29,8 +29,10 @@
   transition: background var(--tr);
 }
 
-.table tbody tr:hover {
-  background: var(--field);
+@media (hover: hover) and (pointer: fine) {
+  .table tbody tr:hover {
+    background: var(--field);
+  }
 }
 
 .clickable {
@@ -57,8 +59,10 @@ th.sortable {
   user-select: none;
 }
 
-th.sortable:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  th.sortable:hover {
+    color: var(--ink);
+  }
 }
 
 .sortInd {

@@ -18,7 +18,26 @@
   border-radius: var(--radius);
   min-width: 240px;
   font-size: var(--t-cap);
-  animation: slidein 0.2s ease;
+  /* keyframes 가 아니라 transition — 저장 직후 토스트가 연달아 뜰 때
+     진행 중인 모션이 처음부터 다시 시작하지 않고 재타깃된다 */
+  opacity: 1;
+  transform: none;
+  transition: opacity var(--dur-menu) var(--ease-out),
+    transform var(--dur-menu) var(--ease-out);
+}
+
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* 퇴장 — 들어온 경로(아래)로 되돌아간다 */
+.toast[data-leaving="true"] {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
 }
 
 .error {
@@ -26,13 +45,10 @@
   background: #000;
 }
 
-@keyframes slidein {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-  to {
+/* 이동만 빼고 페이드는 남긴다 */
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast[data-leaving="true"] {
     transform: none;
-    opacity: 1;
   }
 }

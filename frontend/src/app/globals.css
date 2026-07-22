@@ -45,8 +45,14 @@
   /* misc */
   --radius: 4px;
   --pill: 999px;
-  --tr: 0.13s ease;
+  --tr: 0.13s ease; /* 호버·색 전환 전용 — 등장/퇴장에는 쓰지 않는다 */
   --ring: 0 0 0 3px rgba(0, 0, 0, 0.1);
+  /* motion — 요소별 예산(UI 300ms 미만) */
+  --dur-press: 160ms; /* 눌림 피드백 100~160ms */
+  --dur-menu: 200ms; /* 토스트·작은 팝오버 */
+  --dur-modal: 220ms; /* 모달·드로어 200~500ms */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); /* 등장·퇴장 */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); /* 화면 내 이동 */
 }
 
 * {
@@ -129,13 +135,16 @@ select:disabled {
   cursor: not-allowed;
 }
 
+/* 딤 오버레이 전용 — inset:0 요소를 이동시키면 하단에 틈이 생긴다(화면 전체 배경 이동 금지) */
 @keyframes fadein {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
+
+/* 모션 접근성: reduced motion은 "모션 0"이 아니라 "이동을 빼고 불투명도·색은 남긴다".
+   전역 일괄 차단(transition-duration: 0 !important)은 쓰지 않는다 — 상태 변화를
+   읽을 단서까지 사라진다. 이동이 있는 컴포넌트에서 개별로 transform만 무력화한다. */
