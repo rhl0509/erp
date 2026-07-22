@@ -245,7 +245,9 @@ function MonthlyTrend({
         <div key={r.period} className={styles.trendRow}>
           <span className={styles.trendPeriod}>{r.period}</span>
           <div className={styles.trendBars}>
+            {/* 막대 색만으로는 계열을 알 수 없다 — 스크린리더에는 숫자 두 개만 읽혔다 */}
             <div className={styles.barLine}>
+              <span className="sr-only">매출</span>
               <div
                 className={`${styles.bar} ${styles.barSales}`}
                 style={{ width: pct(r.sales_amount) }}
@@ -253,6 +255,7 @@ function MonthlyTrend({
               <span className={styles.barVal}>{won(r.sales_amount)}</span>
             </div>
             <div className={styles.barLine}>
+              <span className="sr-only">매입</span>
               <div
                 className={`${styles.bar} ${styles.barPurchase}`}
                 style={{ width: pct(r.purchase_amount) }}

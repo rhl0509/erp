@@ -113,15 +113,16 @@ export default function GlPage() {
         </div>
       </div>
 
-      <div className={styles.tabs} role="tablist" aria-label="총계정원장 보기">
+      {/* role="tab" 은 aria-controls·tabpanel·화살표 이동까지 갖춰야 성립한다.
+          반쪽 ARIA 는 없느니만 못하므로, aging 화면과 같은 토글 그룹(aria-pressed)으로 통일. */}
+      <div className={styles.tabs} role="group" aria-label="총계정원장 보기">
         {TABS.map(([key, label]) => (
           <Button
             key={key}
             variant={tab === key ? "primary" : "ghost"}
             size="sm"
             onClick={() => setTab(key)}
-            role="tab"
-            aria-selected={tab === key}
+            aria-pressed={tab === key}
           >
             {label}
           </Button>
@@ -647,6 +648,7 @@ function JournalView() {
             type="date"
             className={styles.dateInput}
             value={dateFrom}
+            max={dateTo || undefined}
             onChange={(e) => {
               setDateFrom(e.target.value);
               setPage(1);
@@ -659,6 +661,7 @@ function JournalView() {
             type="date"
             className={styles.dateInput}
             value={dateTo}
+            min={dateFrom || undefined}
             onChange={(e) => {
               setDateTo(e.target.value);
               setPage(1);
@@ -1059,6 +1062,7 @@ function LedgerView() {
             type="date"
             className={styles.dateInput}
             value={dateFrom}
+            max={dateTo || undefined}
             onChange={(e) => setDateFrom(e.target.value)}
             aria-label="시작일"
             title="시작일"
@@ -1068,6 +1072,7 @@ function LedgerView() {
             type="date"
             className={styles.dateInput}
             value={dateTo}
+            min={dateFrom || undefined}
             onChange={(e) => setDateTo(e.target.value)}
             aria-label="종료일"
             title="종료일"
@@ -1170,6 +1175,14 @@ function ManualEntryModal({ onClose }: { onClose: () => void }) {
     (l) => l.account_code && (Number(l.debit) > 0 || Number(l.credit) > 0),
   );
   const canSave = balanced && hasAmount && validLines.length >= 2;
+  // 저장이 왜 막혔는지 알려준다 — 빈 폼에서 "일치"로 보이면서 저장만 안 되던 상태였다
+  const blockReason = !hasAmount
+    ? "금액을 입력하세요."
+    : validLines.length < 2
+      ? "계정과 금액이 있는 라인이 2개 이상 필요합니다."
+      : !balanced
+        ? `차대가 ${amt(Math.abs(totalDebit - totalCredit))}원 어긋납니다.`
+        : "";
 
   const doSave = async () => {
     if (!canSave) return;
@@ -1208,9 +1221,9 @@ function ManualEntryModal({ onClose }: { onClose: () => void }) {
       wide
       footer={
         <>
-          <span className={balanced ? styles.muted : styles.mismatch}>
+          <span className={blockReason ? styles.mismatch : styles.muted}>
             차 {amt(totalDebit)} · 대 {amt(totalCredit)}
-            {balanced ? " (일치)" : " (불일치)"}
+            {blockReason ? ` — ${blockReason}` : " (일치)"}
           </span>
           <Spacer />
           <Button variant="ghost" onClick={onClose}>

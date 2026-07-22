@@ -47,7 +47,10 @@ export default function TopNav() {
 
   return (
     <div className={styles.topbar}>
-      <div className={styles.brand}>ERP&nbsp;Console</div>
+      {/* 로고 = 홈으로 가는 길. 대시보드가 이 앱의 메인이다(루트 / 도 여기로 보낸다) */}
+      <Link className={styles.brand} href="/dashboard" aria-label="ERP Console 홈(대시보드)">
+        ERP&nbsp;Console
+      </Link>
       <nav className={styles.nav}>
         {visibleItems.map((item) =>
           item.legacy ? (

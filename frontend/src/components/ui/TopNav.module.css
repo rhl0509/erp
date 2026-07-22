@@ -24,6 +24,16 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
+  /* 링크가 됐으므로 전역 a 스타일(밑줄)을 끄고, 눌리는 것임을 커서로 알린다 */
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .brand:hover {
+    opacity: 0.75;
+  }
 }
 .brand::before {
   content: "";

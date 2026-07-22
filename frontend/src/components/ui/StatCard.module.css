@@ -21,12 +21,11 @@
   transform-origin: top;
   transition: transform var(--tr);
 }
+/* 카드는 클릭 불가다 — 호버에 반응하면 "누를 수 있나?" 오인을 준다.
+   테두리 강조만 남기고 액센트 바 연출은 뺀다. */
 @media (hover: hover) and (pointer: fine) {
   .stat:hover {
     border-color: #000;
-  }
-  .stat:hover::before {
-    transform: scaleY(1);
   }
 }
 
