@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, or_
@@ -9,19 +9,13 @@ from ..models import AuditLog, User
 from ..schemas import Page, AuditLogOut
 from ..deps import require_permission
 from ..services import paginate
+from .params import parse_date
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
 _ACTIONS = ("CREATE", "UPDATE", "DELETE")
 _ENTITIES = ("user", "partner", "item", "stock", "purchase_order", "sales_order",
              "payment", "tax_invoice", "warehouse", "gl", "gl_period")
-
-
-def _parse_date(value: str) -> datetime:
-    try:
-        return datetime.strptime(value, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(status_code=400, detail="날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)")
 
 
 @router.get("", response_model=Page[AuditLogOut])
@@ -50,9 +44,9 @@ def list_audit_logs(
         like = f"%{q}%"
         stmt = stmt.where(or_(AuditLog.username.like(like), AuditLog.entity_id.like(like)))
     if date_from:
-        stmt = stmt.where(AuditLog.created_at >= _parse_date(date_from))
+        stmt = stmt.where(AuditLog.created_at >= parse_date(date_from))
     if date_to:
         # 종료일 당일 포함 → 다음날 0시 미만
-        stmt = stmt.where(AuditLog.created_at < _parse_date(date_to) + timedelta(days=1))
+        stmt = stmt.where(AuditLog.created_at < parse_date(date_to) + timedelta(days=1))
 
     return paginate(db, stmt, page, page_size)

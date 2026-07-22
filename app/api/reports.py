@@ -17,6 +17,7 @@ from ..schemas import (
 from ..deps import require_permission
 from ..timeutil import now_business, today
 from ..services import paginate
+from .params import parse_date, validate_order
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -123,22 +124,6 @@ _ITEM_SORT_KEYS = {
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-def _parse_date(value: str) -> datetime:
-    try:
-        return datetime.strptime(value, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(status_code=400, detail="날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)")
-
-
-def _validate_order(value: str) -> None:
-    """정렬 방향은 asc/desc 만 허용한다. 오타를 조용히 desc로 흡수하지 않는다."""
-    if value not in ("asc", "desc"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"정렬 방향은 asc 또는 desc 여야 합니다: {value}",
-        )
-
-
 def _apply_filters(stmt, q, kind, partner_id, date_from, date_to):
     """매입/매출 공통 필터. IN=매입, OUT=매출이며 ADJUST(재고 조정)는 제외한다."""
     stmt = stmt.where(StockMovement.movement_type.in_(("IN", "OUT")))
@@ -161,9 +146,9 @@ def _apply_filters(stmt, q, kind, partner_id, date_from, date_to):
     elif kind == "sales":
         stmt = stmt.where(StockMovement.movement_type == "OUT")
     if date_from:
-        stmt = stmt.where(StockMovement.created_at >= _parse_date(date_from))
+        stmt = stmt.where(StockMovement.created_at >= parse_date(date_from))
     if date_to:
-        stmt = stmt.where(StockMovement.created_at < _parse_date(date_to) + timedelta(days=1))
+        stmt = stmt.where(StockMovement.created_at < parse_date(date_to) + timedelta(days=1))
     return stmt
 
 
@@ -216,7 +201,7 @@ def list_transactions(
             status_code=400,
             detail=f"허용되지 않은 정렬 컬럼입니다: {sort}",
         )
-    _validate_order(order)
+    validate_order(order)
     col = _SORT_COLUMNS[sort]
     direction = col.asc() if order == "asc" else col.desc()
     stmt = _apply_filters(
@@ -425,8 +410,8 @@ def export_transactions(
             status_code=400,
             detail=f"허용되지 않은 품목 정렬 컬럼입니다: {item_sort}",
         )
-    _validate_order(partner_order)
-    _validate_order(item_order)
+    validate_order(partner_order)
+    validate_order(item_order)
 
     stmt = _apply_filters(
         select(StockMovement), q, kind, partner_id, date_from, date_to
