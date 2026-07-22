@@ -12,6 +12,11 @@ secrets.*
 *.sqlite
 *.sqlite3
 erp_dev.db
+# 스키마 복구·마이그레이션 전에 뜨는 백업본(erp_dev.db.bak-YYYYmmdd-HHMMSS 등).
+# 확장자가 .db 로 끝나지 않아 위 *.db 에 안 걸린다 — 비밀번호 해시가 든 파일이다.
+*.db.bak*
+*.db-*
+*.sqlite.bak*
 
 # === Python ===
 .venv/
