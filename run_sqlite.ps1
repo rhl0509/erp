@@ -1,6 +1,6 @@
 ﻿# MySQL 설치 없이 SQLite로 바로 확인용 실행 스크립트.
 # 사용:  .\run_sqlite.ps1
-# 그 다음 브라우저에서 http://localhost:8000/ 접속 -> admin / admin1234
+# 그 다음 브라우저에서 http://localhost:8040/ 접속 -> admin / admin1234
 #
 # (이 파일은 한글 주석이 깨지지 않도록 반드시 'UTF-8 with BOM'으로 저장하세요.)
 
@@ -28,5 +28,5 @@ Write-Host "[1/2] 초기 데이터 시드..." -ForegroundColor Cyan
 & $py -m app.seed
 if ($LASTEXITCODE -ne 0) { Write-Host "[오류] 시드 실패 (종료코드 $LASTEXITCODE)" -ForegroundColor Red; exit 1 }
 
-Write-Host "[2/2] 서버 실행 (http://localhost:8000/)" -ForegroundColor Cyan
-& $py -m uvicorn app.main:app --reload --port 8000
+Write-Host "[2/2] 서버 실행 (http://localhost:8040/)" -ForegroundColor Cyan
+& $py -m uvicorn app.main:app --reload --port 8040

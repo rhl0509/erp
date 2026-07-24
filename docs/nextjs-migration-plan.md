@@ -21,7 +21,7 @@
 | 페이지(13+2) | 대시보드/거래처/품목/재고/창고/발주/수주/매입매출/재고평가/결제/채권채무/회원/감사로그 + 내정보 + 로그인·회원가입 | `app/static/index.html:276-288` |
 | 공통 헬퍼 | `api()` fetch 래퍼(401→강제 로그아웃), `downloadFile()`(엑셀 blob), `toast`, `won`, `esc`, 페이지네이션 | `app/static/index.html:894-930` |
 | nav 배지 | 재고 알림 수(`/api/stock/alerts/count`), 승인 대기 회원 수(`/api/users/pending/count`) 폴링 | `app/static/index.html:279,287,993-994` |
-| CORS | `http://localhost:3000` 기본 허용 — Next dev 기본 포트와 이미 정합 | `app/config.py:28` |
+| CORS | `http://localhost:3040` 기본 허용 — Next dev 기본 포트와 이미 정합 | `app/config.py:28` |
 | 라우팅 | hash 기반(`#partners`), 새로고침 딥링크는 일부 페이지만 복원됨(purchase/sales/valuation/payments/aging 누락) | `app/static/index.html:995-996` |
 
 특기: 백엔드가 이미 잘 정리된 API 계약(오류/페이지네이션 통일, OpenAPI 자동 생성)을 갖고 있어 프론트 전환 난이도는 "화면 이식"에 수렴한다. 백엔드 변경은 원칙적으로 0건.
@@ -67,19 +67,19 @@ D:\erp\
 
 ### 1.2 dev 구성
 
-- FastAPI: `uvicorn app.main:app --port 8000` (기존 그대로)
-- Next dev: `:3000`, `next.config.ts`의 `rewrites`로 프록시:
-  - `/api/:path*` → `http://127.0.0.1:8000/api/:path*`
-  - `/legacy` → `http://127.0.0.1:8000/` (공존 기간, §6.2)
-  - `/static/:path*` → `http://127.0.0.1:8000/static/:path*` (레거시 자산)
+- FastAPI: `uvicorn app.main:app --port 8040` (기존 그대로)
+- Next dev: `:3040`, `next.config.ts`의 `rewrites`로 프록시:
+  - `/api/:path*` → `http://127.0.0.1:8040/api/:path*`
+  - `/legacy` → `http://127.0.0.1:8040/` (공존 기간, §6.2)
+  - `/static/:path*` → `http://127.0.0.1:8040/static/:path*` (레거시 자산)
 - rewrites는 same-origin이므로 **CORS 무관** — `cors_origins` 설정 변경 불필요. 프론트 코드도 상대경로 `/api/...` 그대로 사용(현 `api()` 헬퍼와 동일 관행).
 
 ### 1.3 prod 구성 — 권장: Next 서버(standalone) + 리버스 프록시
 
 ```
 브라우저 ── nginx/Caddy(:80/:443)
-              ├─ /api/*, /docs, /metrics, /health → uvicorn(:8000)
-              └─ 그 외 전부                      → next start(:3000)
+              ├─ /api/*, /docs, /metrics, /health → uvicorn(:8040)
+              └─ 그 외 전부                      → next start(:3040)
 ```
 
 - `output: "standalone"` 빌드 → `node server.js`로 경량 실행. 리버스 프록시가 없으면 Next rewrites가 프록시 역할을 대신해도 됨(단일 진입점 = Next).
@@ -115,7 +115,7 @@ FastAPI(/openapi.json) ──(openapi-typescript)──> frontend/src/lib/api/sc
                                           openapi-fetch 클라이언트가 소비
 ```
 
-- **openapi-typescript**(devDep): `npm run gen:api` = `openapi-typescript http://127.0.0.1:8000/openapi.json -o src/lib/api/schema.d.ts`. 서버 기동 없이도 생성 가능: `python -c "import json; from app.main import app; print(json.dumps(app.openapi()))" > openapi.json` 스크립트 병용 권장(CI 친화).
+- **openapi-typescript**(devDep): `npm run gen:api` = `openapi-typescript http://127.0.0.1:8040/openapi.json -o src/lib/api/schema.d.ts`. 서버 기동 없이도 생성 가능: `python -c "import json; from app.main import app; print(json.dumps(app.openapi()))" > openapi.json` 스크립트 병용 권장(CI 친화).
 - **openapi-fetch**(runtime, ~2KB): 경로·메서드·요청/응답이 전부 타입 체크되는 `client.GET("/api/partners", {params:{query:{...}}})`. 코드젠 산출물이 타입 파일 1개뿐이라 유지비 최소.
 - 대안 비교: hey-api/orval(TanStack Query 훅까지 생성 — 편하지만 생성 코드량·설정 증가, 이 규모엔 openapi-fetch + 얇은 수제 훅이 단순), 수기 래퍼(타입 드리프트 방지 불가 — 기각).
 - 드리프트 방지: CI에서 `gen:api` 재실행 후 `git diff --exit-code`로 스키마-타입 불일치 검출.
@@ -253,14 +253,14 @@ npm i @tanstack/react-query openapi-fetch react-hook-form
 npm i -D openapi-typescript
 
 # 3) 타입 생성 (FastAPI 기동 상태에서)
-npx openapi-typescript http://127.0.0.1:8000/openapi.json -o src/lib/api/schema.d.ts
+npx openapi-typescript http://127.0.0.1:8040/openapi.json -o src/lib/api/schema.d.ts
 ```
 
 첫 커밋(슬라이스 0~1) 파일 목록:
 
 | 파일 | 내용 |
 |---|---|
-| `frontend/next.config.ts` | rewrites: `/api/*`·`/legacy`·`/static/*` → `127.0.0.1:8000` |
+| `frontend/next.config.ts` | rewrites: `/api/*`·`/legacy`·`/static/*` → `127.0.0.1:8040` |
 | `frontend/src/app/globals.css` | `index.html:17-49`의 토큰·베이스 스타일 이식 |
 | `frontend/src/app/layout.tsx` | 폰트(next/font), `<Providers>`(QueryClient) |
 | `frontend/src/lib/api/schema.d.ts` | 생성 산출물 (+ `package.json`에 `gen:api` 스크립트) |

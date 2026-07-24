@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 480  # 8시간
 
     # 콤마로 여러 origin 지정 가능
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3040"
 
     # 인증 세션 쿠키(httpOnly) — Next 앱은 이 쿠키로 인증한다(토큰을 JS/localStorage에
     # 두지 않아 XSS 탈취면을 제거). same-origin 프록시(next rewrites)라 samesite=lax 로
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # 재설정 링크(메일) 수명. 짧을수록 안전하지만 메일 지연을 감안해 기본 30분.
     reset_token_ttl_minutes: int = 30
     # 재설정 링크가 가리킬 프론트 주소(Next 앱).
-    app_base_url: str = "http://localhost:3000"
+    app_base_url: str = "http://localhost:3040"
 
     # ---------- SMTP (선택) ----------
     # smtp_host 가 비어 있으면 메일 발송 기능은 꺼진 것으로 간주하고,

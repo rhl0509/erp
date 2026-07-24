@@ -82,7 +82,7 @@ copy .env.example .env
 DATABASE_URL=mysql+pymysql://root:내비밀번호@localhost:3306/erp_db?charset=utf8mb4
 JWT_SECRET=길고-무작위한-문자열로-반드시-변경
 ACCESS_TOKEN_EXPIRE_MINUTES=480
-CORS_ORIGINS=http://localhost:3000
+CORS_ORIGINS=http://localhost:3040
 ```
 
 ## 4. 초기 데이터 시드
@@ -122,27 +122,27 @@ alembic upgrade head
 그 다음 서버를 실행합니다:
 
 ```powershell
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8040
 ```
 
 이 서버는 **API 전용**입니다(레거시 단일 HTML 콘솔은 2026-07 제거, 웹 UI 는 Next.js 앱으로 이관).
 
-- API 문서(Swagger): http://localhost:8000/docs
-- 헬스체크: http://localhost:8000/health
+- API 문서(Swagger): http://localhost:8040/docs
+- 헬스체크: http://localhost:8040/health
 
 ### 웹 관리 콘솔(Next.js 앱) 실행 ← 실제 화면
 
-별도 터미널에서 `frontend/` 를 실행합니다(같은 origin 으로 `/api` → :8000 프록시).
+별도 터미널에서 `frontend/` 를 실행합니다(같은 origin 으로 `/api` → :8040 프록시).
 
 ```powershell
 cd frontend
 npm install    # 최초 1회
-npm run dev     # http://localhost:3000
+npm run dev     # http://localhost:3040
 ```
 
-> 브라우저에서 **http://localhost:3000** 접속 후 `admin` / `admin1234` 로 로그인하면
+> 브라우저에서 **http://localhost:3040** 접속 후 `admin` / `admin1234` 로 로그인하면
 > 대시보드·거래처·품목·재고·발주/수주·회계·총계정원장을 화면에서 사용할 수 있습니다.
-> (백엔드 :8000 이 함께 떠 있어야 하며, 개발자용 API 는 :8000/docs Swagger 제공)
+> (백엔드 :8040 이 함께 떠 있어야 하며, 개발자용 API 는 :8040/docs Swagger 제공)
 
 ## 6. 명령줄에서 테스트 (curl)
 
@@ -155,7 +155,7 @@ Windows 10/11에는 `curl.exe` 가 기본 포함되어 있습니다.
 로그인 (토큰 발급):
 
 ```powershell
-curl.exe -X POST http://localhost:8000/api/auth/login -d "username=admin&password=admin1234"
+curl.exe -X POST http://localhost:8040/api/auth/login -d "username=admin&password=admin1234"
 ```
 
 응답의 `access_token` 값을 변수에 넣고 거래처 등록:
@@ -163,21 +163,21 @@ curl.exe -X POST http://localhost:8000/api/auth/login -d "username=admin&passwor
 ```powershell
 $TOKEN = "여기에_받은_access_token_붙여넣기"
 
-curl.exe -X POST http://localhost:8000/api/partners -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{\"name\":\"가나다물산\",\"partner_type\":\"customer\",\"ceo_name\":\"김철수\"}'
+curl.exe -X POST http://localhost:8040/api/partners -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{\"name\":\"가나다물산\",\"partner_type\":\"customer\",\"ceo_name\":\"김철수\"}'
 
-curl.exe http://localhost:8000/api/partners -H "Authorization: Bearer $TOKEN"
+curl.exe http://localhost:8040/api/partners -H "Authorization: Bearer $TOKEN"
 ```
 
 ### CMD
 
 ```cmd
-curl -X POST http://localhost:8000/api/auth/login -d "username=admin&password=admin1234"
+curl -X POST http://localhost:8040/api/auth/login -d "username=admin&password=admin1234"
 
 set TOKEN=여기에_받은_access_token_붙여넣기
 
-curl -X POST http://localhost:8000/api/partners -H "Authorization: Bearer %TOKEN%" -H "Content-Type: application/json" -d "{\"name\":\"가나다물산\",\"partner_type\":\"customer\",\"ceo_name\":\"김철수\"}"
+curl -X POST http://localhost:8040/api/partners -H "Authorization: Bearer %TOKEN%" -H "Content-Type: application/json" -d "{\"name\":\"가나다물산\",\"partner_type\":\"customer\",\"ceo_name\":\"김철수\"}"
 
-curl http://localhost:8000/api/partners -H "Authorization: Bearer %TOKEN%"
+curl http://localhost:8040/api/partners -H "Authorization: Bearer %TOKEN%"
 ```
 
 > JSON 안의 따옴표 이스케이프(`\"`)가 번거로우면 Swagger UI 사용을 권장합니다.
@@ -305,7 +305,7 @@ docker compose up --build
 ```
 
 → DB 헬스체크 통과 후 API 컨테이너가 `alembic upgrade head` → 시드 → uvicorn 순으로 실행합니다.
-접속: http://localhost:8000/
+접속: http://localhost:8040/
 
 ## 테스트
 

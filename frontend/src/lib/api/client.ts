@@ -27,7 +27,7 @@ export function forceLogout(): void {
   }
 }
 
-/** 상대경로 /api — next.config.ts rewrites 가 FastAPI(:8000)로 프록시(same-origin). */
+/** 상대경로 /api — next.config.ts rewrites 가 FastAPI(:8040)로 프록시(same-origin). */
 export const client = createClient<paths>({ baseUrl: "" });
 
 client.use({

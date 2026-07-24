@@ -24,7 +24,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      # 호스트 8040 → 컨테이너 8000. 로컬 개발(run.bat/run_sqlite)과 접속 포트를
+      # 8040 으로 통일(README Docker 안내와 일치). 컨테이너 내부는 8000 유지.
+      - "8040:8000"
 
 volumes:
   dbdata:
