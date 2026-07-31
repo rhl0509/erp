@@ -35,3 +35,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# === graphify (코드 지도 산출물) ===
+graphify-out/
