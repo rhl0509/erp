@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import User
+from app.models import AuditLog, User
 
 from conftest import clear_must_change   # tests/ 는 패키지가 아니라 pytest 가 sys.path 에 넣는다
 
@@ -280,6 +280,25 @@ def test_totp_setup_enable_and_login(client):
 
     # 올바른 코드 → 통과
     assert _ok(_login(client, "admin", "admin1234", otp=pyotp.TOTP(secret).now()))["access_token"]
+
+
+def test_totp_setup_records_audit_without_leaking_secret(client):
+    """secret 발급도 계정 상태 변경이라 흔적이 남아야 한다 — 다만 secret 값 자체는 남기지 않는다."""
+    clear_must_change()
+    h = {"Authorization": f"Bearer {_ok(_login(client, 'admin', 'admin1234'))['access_token']}"}
+    setup = _ok(client.post("/api/auth/2fa/setup", headers=h))
+
+    db = SessionLocal()
+    try:
+        log = db.execute(
+            select(AuditLog).where(AuditLog.entity == "user").order_by(AuditLog.id.desc())
+        ).scalars().first()
+        assert log is not None
+        assert (log.action, log.username) == ("UPDATE", "admin")
+        assert "totp_secret_issued" in (log.after or "")
+        assert setup["secret"] not in (log.after or "")
+    finally:
+        db.close()
 
 
 def test_totp_enable_rejects_wrong_code(client):

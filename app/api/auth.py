@@ -386,6 +386,7 @@ def totp_setup(
 
     secret = pyotp.random_base32()
     user.totp_secret = secret
+    record_audit(db, user, "UPDATE", "user", user.id, after={"totp_secret_issued": True})
     db.commit()
 
     uri = pyotp.TOTP(secret).provisioning_uri(name=user.username, issuer_name="ERP")
